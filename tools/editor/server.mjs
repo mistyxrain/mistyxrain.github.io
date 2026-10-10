@@ -18,6 +18,8 @@ const ROOT = path.resolve(HERE, '../..');
 const POSTS_DIR = path.join(ROOT, 'src/content/blog');
 const IMG_DIR = path.join(ROOT, 'src/assets/posts');
 const FILE_DIR = path.join(ROOT, 'public/files');
+const SITE_FILE = path.join(ROOT, 'src/site.json');
+const PUBLIC_DIR = path.join(ROOT, 'public');
 // 新文章（导入的、未保存的）的图片和附件先放这里，不会被发布；点「保存」才移到正式位置
 const STAGE_DIR = path.join(HERE, '.staging');
 const stageImg = (key) => path.join(STAGE_DIR, key, 'img');
@@ -105,9 +107,14 @@ function savePost(slug, p) {
 	if (!p.title?.trim()) throw httpError(400, '标题不能为空');
 	if (!/^\d{4}-\d{2}-\d{2}$/.test(p.pubDate || '')) throw httpError(400, '日期格式应为 2026-10-11');
 	if (p.isNew && fs.existsSync(postFile(slug))) throw httpError(409, `已有网址名为「${slug}」的文章，请换一个`);
-	if (p.isNew && p.assetSlug && SLUG_RE.test(p.assetSlug)) moveAssets(p.assetSlug, slug, p);
+	const key = p.isNew ? p.assetSlug : slug;
+	if (key && SLUG_RE.test(key)) moveAssets(key, slug, p);
 	const tags = [...new Set((p.tags || []).map((t) => String(t).trim()).filter(Boolean))];
 	fs.writeFileSync(postFile(slug), serializePost({ ...p, title: p.title.trim(), tags }, p.body || ''));
+}
+
+function usedNames(...dirs) {
+	return new Set(dirs.flatMap((d) => (fs.existsSync(d) ? fs.readdirSync(d) : [])));
 }
 
 // ---------- 思源 zip 导入 ----------
@@ -140,7 +147,8 @@ function safeName(name, used, prefix) {
 	return n;
 }
 
-function importSiyuanZip(buf) {
+// key：导入到已打开的文章（只替换正文）时传入它的资源目录名；不传则按标题新建
+function importSiyuanZip(buf, key) {
 	const entries = unzipSync(new Uint8Array(buf));
 	const names = Object.keys(entries).filter((n) => !n.endsWith('/'));
 	const mdName = names.find((n) => n.toLowerCase().endsWith('.md'));
@@ -151,11 +159,12 @@ function importSiyuanZip(buf) {
 	const fallbackTitle = path.basename(mdName, '.md');
 	const h1 = md.match(/^# (.+)$/m);
 	const title = (h1 ? h1[1] : fallbackTitle).trim();
-	const slug = uniqueSlug(slugify(title));
-	fs.rmSync(path.join(STAGE_DIR, slug), { recursive: true, force: true });
+	const slug = key && SLUG_RE.test(key) ? key : uniqueSlug(slugify(title));
+	if (!key) fs.rmSync(path.join(STAGE_DIR, slug), { recursive: true, force: true });
 
-	const usedImg = new Set();
-	const usedFile = new Set();
+	const usedImg = usedNames(path.join(IMG_DIR, slug), stageImg(slug));
+	const usedFile = usedNames(path.join(FILE_DIR, slug), stageFile(slug));
+	const before = { img: usedImg.size, file: usedFile.size };
 	const written = new Map(); // zip 内路径 -> 文章里用的新路径
 	const place = (rel) => {
 		const key = path.posix.normalize(mdDir + rel);
@@ -226,22 +235,74 @@ function importSiyuanZip(buf) {
 		draft: false,
 		heroImage,
 		body: md,
-		imported: { images: usedImg.size, files: usedFile.size, extraMd: names.filter((n) => n.endsWith('.md')).length - 1 },
+		imported: { images: usedImg.size - before.img, files: usedFile.size - before.file, extraMd: names.filter((n) => n.endsWith('.md')).length - 1 },
 	};
 }
 
 // ---------- 单个文件上传（封面、插图） ----------
 
-function saveUpload(slug, name, buf, staged) {
+function saveUpload(slug, name, buf) {
 	if (!SLUG_RE.test(slug)) throw httpError(400, '请先填写网址名');
 	const ext = path.extname(name).toLowerCase();
 	if (!IMAGE_EXT.has(ext)) throw httpError(400, '只支持图片文件');
-	const dir = staged ? stageImg(slug) : path.join(IMG_DIR, slug);
+	const dir = stageImg(slug);
 	fs.mkdirSync(dir, { recursive: true });
-	const used = new Set(fs.readdirSync(dir));
+	const used = usedNames(dir, path.join(IMG_DIR, slug));
 	const n = safeName(name, used, 'img');
 	fs.writeFileSync(path.join(dir, n), buf);
 	return { path: `../../assets/posts/${slug}/${n}` };
+}
+
+// ---------- 站点设置 ----------
+
+const readSite = () => JSON.parse(fs.readFileSync(SITE_FILE, 'utf8'));
+const writeSite = (site) => fs.writeFileSync(SITE_FILE, `${JSON.stringify(site, null, 2)}\n`);
+
+function updateSite(input) {
+	const site = readSite();
+	for (const k of ['title', 'description', 'email']) if (typeof input[k] === 'string') site[k] = input[k].trim();
+	if (!site.title) throw httpError(400, '博客名不能为空');
+	if (Array.isArray(input.presetTags)) site.presetTags = [...new Set(input.presetTags.map((t) => String(t).trim()).filter(Boolean))];
+	writeSite(site);
+	return site;
+}
+
+function saveWechatQr(name, buf) {
+	const ext = path.extname(name).toLowerCase();
+	if (!['.png', '.jpg', '.jpeg', '.webp'].includes(ext)) throw httpError(400, '二维码请用 png / jpg / webp 图片');
+	const site = readSite();
+	const old = site.wechatQr && path.join(PUBLIC_DIR, site.wechatQr);
+	if (old && old.startsWith(path.join(PUBLIC_DIR, 'images') + path.sep) && fs.existsSync(old)) fs.rmSync(old);
+	fs.mkdirSync(path.join(PUBLIC_DIR, 'images'), { recursive: true });
+	fs.writeFileSync(path.join(PUBLIC_DIR, 'images', `wechat-qr${ext}`), buf);
+	site.wechatQr = `/images/wechat-qr${ext}`;
+	writeSite(site);
+	return site;
+}
+
+// 标签：文章里用到的 + 预设的
+function tagStats() {
+	const count = new Map();
+	for (const post of listPosts()) for (const t of post.tags) count.set(t, (count.get(t) || 0) + 1);
+	for (const t of readSite().presetTags || []) if (!count.has(t)) count.set(t, 0);
+	return [...count].map(([name, n]) => ({ name, count: n })).sort((a, b) => b.count - a.count || a.name.localeCompare(b.name));
+}
+
+// 改名或删除标签：同步修改所有用到它的文章和预设列表；to 为空表示删除
+function changeTag(from, to) {
+	to = (to || '').trim();
+	let changed = 0;
+	for (const { slug } of listPosts()) {
+		const post = readPost(slug);
+		if (!post.tags.includes(from)) continue;
+		post.tags = [...new Set(post.tags.flatMap((t) => (t === from ? (to ? [to] : []) : [t])))];
+		fs.writeFileSync(postFile(slug), serializePost(post, post.body));
+		changed++;
+	}
+	const site = readSite();
+	site.presetTags = [...new Set((site.presetTags || []).flatMap((t) => (t === from ? (to ? [to] : []) : [t])))];
+	writeSite(site);
+	return { changed };
 }
 
 // ---------- git ----------
@@ -336,10 +397,20 @@ async function handle(req, res) {
 		return res.end(fs.readFileSync(path.join(HERE, 'index.html')));
 	}
 	if (req.method === 'GET' && p === '/api/posts') return json(res, 200, listPosts());
-	if (req.method === 'GET' && p === '/api/tags') {
-		const count = {};
-		for (const post of listPosts()) for (const t of post.tags) count[t] = (count[t] || 0) + 1;
-		return json(res, 200, Object.keys(count).sort((a, b) => count[b] - count[a]));
+	if (req.method === 'GET' && p === '/api/tags') return json(res, 200, tagStats());
+	if (req.method === 'POST' && p === '/api/tags/change') {
+		const { from, to } = JSON.parse((await readBody(req)).toString('utf8'));
+		if (!from) throw httpError(400, '缺少标签名');
+		return json(res, 200, changeTag(from, to));
+	}
+	if (req.method === 'GET' && p === '/api/site') return json(res, 200, readSite());
+	if (req.method === 'PUT' && p === '/api/site') return json(res, 200, updateSite(JSON.parse((await readBody(req)).toString('utf8'))));
+	if (req.method === 'POST' && p === '/api/site/wechat') return json(res, 200, saveWechatQr(url.searchParams.get('name') || 'qr.png', await readBody(req, 10 * 1024 * 1024)));
+	if (req.method === 'GET' && p === '/api/site/wechat') {
+		const file = path.join(PUBLIC_DIR, readSite().wechatQr || '');
+		if (!file.startsWith(PUBLIC_DIR + path.sep) || !fs.existsSync(file)) throw httpError(404, 'not found');
+		res.writeHead(200, { 'content-type': MIME[path.extname(file).toLowerCase()] || 'application/octet-stream', 'cache-control': 'no-store' });
+		return res.end(fs.readFileSync(file));
 	}
 	if (req.method === 'GET' && m) {
 		const slug = decodeURIComponent(m[1]);
@@ -352,9 +423,9 @@ async function handle(req, res) {
 		savePost(slug, body);
 		return json(res, 200, readPost(slug));
 	}
-	if (req.method === 'POST' && p === '/api/import') return json(res, 200, importSiyuanZip(await readBody(req)));
+	if (req.method === 'POST' && p === '/api/import') return json(res, 200, importSiyuanZip(await readBody(req), url.searchParams.get('key')));
 	if (req.method === 'POST' && p === '/api/upload') {
-		return json(res, 200, saveUpload(url.searchParams.get('slug') || '', url.searchParams.get('name') || 'image.png', await readBody(req, 30 * 1024 * 1024), url.searchParams.get('new') === '1'));
+		return json(res, 200, saveUpload(url.searchParams.get('slug') || '', url.searchParams.get('name') || 'image.png', await readBody(req, 30 * 1024 * 1024)));
 	}
 	if (req.method === 'GET' && p === '/api/image') {
 		// 给界面显示缩略图：只允许读 src/assets/posts 下的图片

@@ -1,5 +1,5 @@
 ---
-import { NAV, SITE_TITLE } from '../consts';
+import { EMAIL, NAV, SITE_TITLE, WECHAT_QR } from '../consts';
 
 const path = Astro.url.pathname;
 const isActive = (href: string) => (href === '/' ? path === '/' : path.startsWith(href));
@@ -21,7 +21,30 @@ const isActive = (href: string) => (href === '/' ? path === '/' : path.startsWit
 			{NAV.map(({ href, label }) => (
 				<a href={href} class:list={{ active: isActive(href) }}>{label}</a>
 			))}
-			<button id="theme-toggle" type="button" aria-label="切换深色/浅色">
+			{EMAIL && (
+				<div class="contact">
+					<button class="icon-btn" type="button" aria-label="邮箱" aria-expanded="false">
+						<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="2" /><path d="m3.5 6.5 8.5 6.5 8.5-6.5" /></svg>
+					</button>
+					<div class="pop" role="dialog" aria-label="邮箱">
+						<p class="pop-title">给我写信</p>
+						<a class="mail" href={`mailto:${EMAIL}`}>{EMAIL}</a>
+						<button type="button" class="copy" data-copy={EMAIL}>复制地址</button>
+					</div>
+				</div>
+			)}
+			{WECHAT_QR && (
+				<div class="contact">
+					<button class="icon-btn" type="button" aria-label="微信" aria-expanded="false">
+						<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9.5 4C5.4 4 2 6.8 2 10.2c0 1.9 1 3.6 2.7 4.7L4 17.5l2.9-1.5c.8.2 1.7.4 2.6.4" /><path d="M15.5 9.5c3.6 0 6.5 2.4 6.5 5.4 0 1.6-.9 3.1-2.3 4.1l.6 2.2-2.5-1.3c-.7.2-1.5.3-2.3.3-3.6 0-6.5-2.4-6.5-5.3s2.9-5.4 6.5-5.4z" /><circle cx="7" cy="9.3" r=".6" /><circle cx="12" cy="9.3" r=".6" /><circle cx="13.4" cy="14.3" r=".5" /><circle cx="17.6" cy="14.3" r=".5" /></svg>
+					</button>
+					<div class="pop" role="dialog" aria-label="微信">
+						<p class="pop-title">微信扫一扫，加我好友</p>
+						<img src={WECHAT_QR} width="180" height="180" alt="微信二维码" loading="lazy" />
+					</div>
+				</div>
+			)}
+			<button id="theme-toggle" class="icon-btn" type="button" aria-label="切换深色/浅色">
 				<svg viewBox="0 0 24 24" aria-hidden="true">
 					<path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z" />
 				</svg>
@@ -40,6 +63,33 @@ const isActive = (href: string) => (href === '/' ? path === '/' : path.startsWit
 		root.dataset.theme = next;
 		try { localStorage.setItem('theme', next); } catch {}
 	});
+
+	// 邮箱 / 微信 弹出框：点图标开关，点别处或按 Esc 关闭
+	(() => {
+		const boxes = [...document.querySelectorAll('.contact')];
+		const closeAll = (except) => boxes.forEach((b) => {
+			if (b === except) return;
+			b.classList.remove('open');
+			b.querySelector('.icon-btn').setAttribute('aria-expanded', 'false');
+		});
+		boxes.forEach((b) => b.querySelector('.icon-btn').addEventListener('click', (e) => {
+			e.stopPropagation();
+			closeAll(b);
+			const open = b.classList.toggle('open');
+			e.currentTarget.setAttribute('aria-expanded', String(open));
+		}));
+		document.addEventListener('click', (e) => { if (!e.target.closest('.pop')) closeAll(); });
+		document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeAll(); });
+		document.querySelectorAll('.pop .copy').forEach((btn) => btn.addEventListener('click', async () => {
+			try {
+				await navigator.clipboard.writeText(btn.dataset.copy);
+				btn.textContent = '已复制 ✓';
+			} catch {
+				btn.textContent = '请手动复制';
+			}
+			setTimeout(() => (btn.textContent = '复制地址'), 1500);
+		}));
+	})();
 </script>
 
 <style>
@@ -71,6 +121,7 @@ const isActive = (href: string) => (href === '/' ? path === '/' : path.startsWit
 		color: var(--ink);
 		text-decoration: none;
 		letter-spacing: 0.1em;
+		white-space: nowrap;
 	}
 	.lantern {
 		width: 18px;
@@ -96,6 +147,7 @@ const isActive = (href: string) => (href === '/' ? path === '/' : path.startsWit
 		color: var(--muted);
 		text-decoration: none;
 		font-size: 0.95rem;
+		white-space: nowrap;
 	}
 	nav a:hover {
 		color: var(--ink);
@@ -105,7 +157,7 @@ const isActive = (href: string) => (href === '/' ? path === '/' : path.startsWit
 		color: var(--ink);
 		font-weight: 600;
 	}
-	#theme-toggle {
+	.icon-btn {
 		margin-left: 4px;
 		width: 34px;
 		height: 34px;
@@ -117,20 +169,91 @@ const isActive = (href: string) => (href === '/' ? path === '/' : path.startsWit
 		cursor: pointer;
 		color: var(--muted);
 	}
-	#theme-toggle:hover {
+	.icon-btn:hover {
 		background: var(--soft);
 		color: var(--ink);
 	}
-	#theme-toggle svg {
+	.icon-btn svg {
 		width: 18px;
 		height: 18px;
 		fill: none;
 		stroke: currentColor;
 		stroke-width: 1.8;
 	}
+	.icon-btn svg circle {
+		fill: currentColor;
+		stroke: none;
+	}
+	.contact {
+		position: relative;
+	}
+	.pop {
+		display: none;
+		position: absolute;
+		top: calc(100% + 10px);
+		right: 0;
+		z-index: 20;
+		padding: 14px 16px;
+		border: 1px solid var(--line);
+		border-radius: 10px;
+		background: var(--bg);
+		box-shadow: 0 8px 28px rgb(0 0 0 / 0.12);
+		text-align: center;
+		white-space: nowrap;
+	}
+	.contact.open .pop {
+		display: block;
+	}
+	.contact.open .icon-btn {
+		color: var(--accent);
+	}
+	.pop-title {
+		margin: 0 0 8px;
+		color: var(--muted);
+		font-size: 0.85rem;
+	}
+	.pop img {
+		display: block;
+		width: 180px;
+		height: 180px;
+		border-radius: 6px;
+		background: #fff;
+	}
+	.pop .mail {
+		display: block;
+		color: var(--ink);
+		font-weight: 600;
+		text-decoration: none;
+	}
+	.pop .copy {
+		margin-top: 10px;
+		padding: 4px 12px;
+		border: 1px solid var(--line);
+		border-radius: 6px;
+		background: none;
+		color: var(--muted);
+		cursor: pointer;
+		font-size: 0.85rem;
+	}
+	.pop .copy:hover {
+		color: var(--accent);
+		border-color: var(--accent);
+	}
 	@media (max-width: 480px) {
+		.icon-btn {
+			width: 30px;
+			margin-left: 0;
+		}
+		.pop {
+			right: -40px;
+		}
 		nav a {
-			padding: 6px 7px;
+			padding: 6px 5px;
+			font-size: 0.9rem;
+		}
+		.brand {
+			letter-spacing: 0.04em;
+			gap: 6px;
 		}
 	}
 </style>

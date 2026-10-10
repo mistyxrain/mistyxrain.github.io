@@ -94,16 +94,37 @@
 	#toast.show { opacity: 1; }
 	#toast.err { background: var(--danger); color: #fff; }
 	.muted { color: var(--muted); }
+
+	.picks { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 10px; max-height: 50vh; overflow: auto; margin: 6px 0; }
+	.picks button { padding: 0; border-radius: 6px; overflow: hidden; aspect-ratio: 2/1; background: var(--soft); }
+	.picks button:hover { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent); }
+	.picks img { width: 100%; height: 100%; object-fit: cover; display: block; }
+
+	.panel { max-width: 760px; margin: 0 auto; padding: 24px; display: grid; gap: 16px; }
+	.panel h2 { margin: 0; color: var(--ink); font-size: 20px; }
+	.panel .note { color: var(--muted); margin: -8px 0 0; }
+	.qr { display: flex; gap: 16px; align-items: center; }
+	.qr img { width: 150px; height: 150px; border-radius: 8px; border: 1px solid var(--line); background: #fff; object-fit: contain; }
+	.tag-table { width: 100%; border-collapse: collapse; }
+	.tag-table td { padding: 8px 6px; border-bottom: 1px dashed var(--line); }
+	.tag-table td:last-child { text-align: right; white-space: nowrap; }
+	.tag-table .n { color: var(--muted); width: 120px; }
+	.danger { color: var(--danger) !important; }
+	.add-tag { display: flex; gap: 8px; }
+	.add-tag input { max-width: 260px; }
 </style>
 </head>
 <body>
 <header>
 	<div class="brand">🏮 提灯 <small>· 本地写作</small></div>
+	<button type="button" class="ghost" id="btn-site">站点设置</button>
+	<button type="button" class="ghost" id="btn-tags">标签管理</button>
 	<button type="button" id="btn-new">＋ 新建文章</button>
 	<button type="button" id="btn-import">导入思源 zip</button>
 	<button type="button" class="primary" id="btn-publish">发布到网站<span class="badge" id="pub-count" hidden></span></button>
 	<input type="file" id="zip-input" accept=".zip" hidden />
 	<input type="file" id="img-input" accept="image/*" hidden />
+	<input type="file" id="body-zip-input" accept=".zip" hidden />
 </header>
 
 <div class="layout">
@@ -137,7 +158,7 @@
 			<label><span>封面图</span>
 				<div class="cover">
 					<span id="cover-view"></span>
-					<button type="button" id="btn-cover">选择图片…</button>
+					<button type="button" id="btn-cover">选择封面…</button>
 					<button type="button" class="ghost" id="btn-cover-rm">移除</button>
 				</div>
 			</label>
@@ -145,7 +166,10 @@
 		</div>
 		<div class="body-head">
 			<span class="muted">正文（Markdown）</span>
-			<button type="button" class="ghost" id="btn-insert-img">插入图片…</button>
+			<span>
+				<button type="button" class="ghost" id="btn-body-zip">从思源 zip 导入正文…</button>
+				<button type="button" class="ghost" id="btn-insert-img">插入图片…</button>
+			</span>
 		</div>
 		<textarea id="f-body" spellcheck="false"></textarea>
 		<div class="actions">
@@ -186,11 +210,14 @@ function toast(msg, err) {
 	t._h = setTimeout(() => (t.className = ''), err ? 4000 : 2000);
 }
 
+// 弹窗：buttons 为 [文字, 返回值, 样式]；弹窗内容里带 data-pick 的元素点击后也会关闭并返回它的值
 function dialog(title, html, buttons) {
 	return new Promise((resolve) => {
 		const d = $('#dlg');
+		const finish = (v) => { d.onclose = null; d.close(); resolve(v); };
 		$('#dlg-title').textContent = title;
 		$('#dlg-body').innerHTML = html;
+		$('#dlg-body').querySelectorAll('[data-pick]').forEach((el) => (el.onclick = () => finish(el.dataset.pick)));
 		const box = $('#dlg-btns');
 		box.innerHTML = '';
 		for (const [label, value, cls] of buttons) {
@@ -198,12 +225,21 @@ function dialog(title, html, buttons) {
 			b.type = 'button';
 			b.textContent = label;
 			if (cls) b.className = cls;
-			b.onclick = () => { d.close(); resolve(value); };
+			b.onclick = () => finish(value);
 			box.append(b);
 		}
-		d.onclose = () => resolve(d.returnValue === 'esc' ? null : undefined);
+		d.onclose = () => resolve(undefined);
 		d.showModal();
+		$('#dlg-body input')?.focus();
 	});
+}
+
+async function askText(title, label, value = '') {
+	const html = `<label><span>${esc(label)}</span><input id="dlg-input" value="${esc(value)}" /></label>`;
+	const d = dialog(title, html, [['取消', false], ['确定', true, 'primary']]);
+	$('#dlg-input').addEventListener('keydown', (e) => { if (e.key === 'Enter') $('#dlg-btns .primary').click(); });
+	const ok = await d;
+	return ok ? $('#dlg-input').value.trim() : null;
 }
 
 async function confirmLeave() {
@@ -213,7 +249,9 @@ async function confirmLeave() {
 
 // ---------- 列表 ----------
 async function loadList() {
-	[posts, allTags] = await Promise.all([api('/api/posts'), api('/api/tags')]);
+	const [p, tags] = await Promise.all([api('/api/posts'), api('/api/tags')]);
+	posts = p;
+	allTags = tags.map((t) => t.name);
 	renderList();
 	refreshPublishCount();
 }
@@ -297,7 +335,8 @@ function showEditor(post) {
 		}
 	});
 	$('#tag-input').addEventListener('blur', (e) => { if (e.target.value.trim()) { addTag(e.target.value); e.target.value = ''; } });
-	$('#btn-cover').onclick = () => pickImage(async (path) => { cur.heroImage = path; renderCover(); setDirty(true); });
+	$('#btn-cover').onclick = chooseCover;
+	$('#btn-body-zip').onclick = () => { $('#body-zip-input').value = ''; $('#body-zip-input').click(); };
 	$('#btn-cover-rm').onclick = () => { cur.heroImage = ''; renderCover(); setDirty(true); };
 	$('#btn-insert-img').onclick = () => pickImage((path, name) => insertAtCursor(`\n![${name.replace(/\.[^.]+$/, '')}](${path})\n`));
 	$('#btn-preview').onclick = preview;
@@ -356,21 +395,66 @@ function currentSlug() {
 	return $('#f-slug').value.trim();
 }
 
+// 图片存放的目录名：新文章用 assetSlug（没有就取当前网址名），已有文章就是自己的网址名
+function assetKey() {
+	const key = cur.isNew ? cur.assetSlug || currentSlug() : cur.slug;
+	if (!/^[a-z0-9][a-z0-9-]*$/.test(key)) return null;
+	if (cur.isNew) cur.assetSlug = key;
+	return key;
+}
+
 function pickImage(onDone) {
-	const slug = cur.isNew ? cur.assetSlug || currentSlug() : cur.slug;
-	if (!/^[a-z0-9][a-z0-9-]*$/.test(slug)) return toast('请先填写标题或网址名', true);
-	if (cur.isNew && !cur.assetSlug) cur.assetSlug = slug;
+	const slug = assetKey();
+	if (!slug) return toast('请先填写标题或网址名', true);
 	const input = $('#img-input');
 	input.value = '';
 	input.onchange = async () => {
 		const file = input.files[0];
 		if (!file) return;
 		try {
-			const r = await api(`/api/upload?slug=${encodeURIComponent(slug)}&name=${encodeURIComponent(file.name)}${cur.isNew ? '&new=1' : ''}`, { method: 'POST', body: file });
+			const r = await api(`/api/upload?slug=${encodeURIComponent(slug)}&name=${encodeURIComponent(file.name)}`, { method: 'POST', body: file });
 			onDone(r.path, file.name);
 		} catch (e) { toast(e.message, true); }
 	};
 	input.click();
+}
+
+// 封面：从正文里已有的图片中挑，或上传新图
+async function chooseCover() {
+	const body = $('#f-body').value;
+	const found = [...body.matchAll(/\]\((\.\.\/\.\.\/assets\/posts\/[^)\s]+)\)|src=["'](\.\.\/\.\.\/assets\/posts\/[^"']+)["']/g)];
+	const imgs = [...new Set(found.map((m) => m[1] || m[2]))];
+	const grid = imgs.length
+		? `<p class="muted">点一张正文里的图片作为封面：</p><div class="picks">${imgs
+				.map((p) => `<button type="button" data-pick="${esc(p)}"><img src="/api/image?path=${encodeURIComponent(p)}" alt="" loading="lazy" /></button>`)
+				.join('')}</div>`
+		: '<p class="muted">正文里还没有图片，可以上传一张新图片作为封面。</p>';
+	const v = await dialog('选择封面', grid, [['取消', ''], ['上传新图片…', '__upload__', 'primary']]);
+	if (v === '__upload__') return pickImage((path) => { cur.heroImage = path; renderCover(); setDirty(true); });
+	if (v) { cur.heroImage = v; renderCover(); setDirty(true); }
+}
+
+// 把思源 zip 的内容导入到当前文章的正文（标题、简介、封面为空时也一并填上）
+async function importBodyZip(file) {
+	if (!file || !/\.zip$/i.test(file.name)) return toast('请选择思源导出的 .zip 文件', true);
+	if ($('#f-body').value.trim()) {
+		const ok = await dialog('替换正文？', '<p>导入会<b>替换</b>当前正文内容。不满意的话，不点保存、直接切到别的文章即可放弃。</p>', [['取消', false], ['替换', true, 'primary']]);
+		if (!ok) return;
+	}
+	const key = assetKey();
+	try {
+		const r = await api('/api/import' + (key ? '?key=' + encodeURIComponent(key) : ''), { method: 'POST', body: file });
+		if (cur.isNew && !cur.assetSlug) {
+			cur.assetSlug = r.assetSlug;
+			if (!currentSlug()) $('#f-slug').value = r.slug;
+		}
+		$('#f-body').value = r.body;
+		if (!$('#f-title').value.trim()) $('#f-title').value = r.title;
+		if (!$('#f-desc').value.trim()) $('#f-desc').value = r.description;
+		if (!cur.heroImage && r.heroImage) { cur.heroImage = r.heroImage; renderCover(); }
+		setDirty(true);
+		toast(`已导入正文：${r.imported.images} 张图片${r.imported.files ? `、${r.imported.files} 个附件` : ''}，记得保存`);
+	} catch (e) { toast(e.message, true); }
 }
 
 function insertAtCursor(text) {
@@ -461,8 +545,122 @@ async function publishFlow() {
 	}
 }
 
+// ---------- 站点设置 ----------
+const putJson = (url, data, method = 'PUT') => api(url, { method, headers: { 'content-type': 'application/json' }, body: JSON.stringify(data) });
+
+async function showSite() {
+	if (!(await confirmLeave())) return;
+	let site;
+	try { site = await api('/api/site'); } catch (e) { return toast(e.message, true); }
+	cur = null;
+	dirty = false;
+	renderList();
+	$('#main').innerHTML = `
+		<form class="panel" id="site-form" autocomplete="off">
+			<h2>站点设置</h2>
+			<p class="note">保存后点右上角「发布到网站」才会更新到网上。</p>
+			<label><span>博客名（首页大标题、浏览器标签上的名字）</span><input id="s-title" required value="${esc(site.title)}" /></label>
+			<label><span>个签（博客名下面那句话）</span><input id="s-desc" value="${esc(site.description)}" /></label>
+			<label><span>邮箱（网站顶部「信封」图标里显示，留空则不显示该图标）</span><input id="s-email" type="email" value="${esc(site.email)}" /></label>
+			<label><span>微信二维码（网站顶部「微信」图标里显示）</span>
+				<div class="qr">
+					<img id="s-qr" src="/api/site/wechat?t=${Date.now()}" alt="" />
+					<button type="button" id="s-qr-btn">更换二维码…</button>
+				</div>
+			</label>
+			<div class="actions"><span class="hint"></span><button type="submit" class="primary">保存设置</button></div>
+		</form>`;
+	$('#main').scrollTop = 0;
+	$('#s-qr').onerror = (e) => (e.target.style.visibility = 'hidden');
+	$('#site-form').onsubmit = async (e) => {
+		e.preventDefault();
+		try {
+			await putJson('/api/site', { title: $('#s-title').value, description: $('#s-desc').value, email: $('#s-email').value });
+			toast('站点设置已保存');
+			refreshPublishCount();
+		} catch (err) { toast(err.message, true); }
+	};
+	$('#s-qr-btn').onclick = () => {
+		const input = $('#img-input');
+		input.value = '';
+		input.onchange = async () => {
+			const file = input.files[0];
+			if (!file) return;
+			try {
+				await api('/api/site/wechat?name=' + encodeURIComponent(file.name), { method: 'POST', body: file });
+				$('#s-qr').style.visibility = '';
+				$('#s-qr').src = '/api/site/wechat?t=' + Date.now();
+				toast('二维码已更换');
+				refreshPublishCount();
+			} catch (err) { toast(err.message, true); }
+		};
+		input.click();
+	};
+}
+
+// ---------- 标签管理 ----------
+async function showTagManager() {
+	if (!(await confirmLeave())) return;
+	let tags, site;
+	try { [tags, site] = await Promise.all([api('/api/tags'), api('/api/site')]); } catch (e) { return toast(e.message, true); }
+	cur = null;
+	dirty = false;
+	renderList();
+	const rows = tags
+		.map((t) => `<tr>
+			<td>#${esc(t.name)}</td>
+			<td class="n">${t.count ? `${t.count} 篇文章` : '暂未使用'}</td>
+			<td><button type="button" class="ghost" data-rename="${esc(t.name)}">改名</button>
+				<button type="button" class="ghost danger" data-del="${esc(t.name)}" data-count="${t.count}">删除</button></td>
+		</tr>`)
+		.join('');
+	$('#main').innerHTML = `
+		<div class="panel">
+			<h2>标签管理</h2>
+			<p class="note">改名、删除会同步修改所有用到这个标签的文章。新增的标签会出现在写文章时的「已有标签」里。</p>
+			<div class="add-tag"><input id="new-tag" placeholder="新标签名" /><button type="button" id="add-tag-btn">新增标签</button></div>
+			<table class="tag-table"><tbody>${rows || '<tr><td class="muted">还没有标签</td></tr>'}</tbody></table>
+		</div>`;
+	$('#main').scrollTop = 0;
+
+	const reload = async (msg) => { toast(msg); await loadList(); showTagManager(); };
+	const addPreset = async () => {
+		const name = $('#new-tag').value.trim().replace(/^#/, '');
+		if (!name) return;
+		if (tags.some((t) => t.name === name)) return toast('已有这个标签', true);
+		try {
+			await putJson('/api/site', { presetTags: [...(site.presetTags || []), name] });
+			reload(`已新增标签 #${name}`);
+		} catch (e) { toast(e.message, true); }
+	};
+	$('#add-tag-btn').onclick = addPreset;
+	$('#new-tag').onkeydown = (e) => { if (e.key === 'Enter') addPreset(); };
+
+	$('#main').querySelectorAll('[data-rename]').forEach((b) => (b.onclick = async () => {
+		const from = b.dataset.rename;
+		const to = (await askText('标签改名', `把 #${from} 改成：`, from))?.replace(/^#/, '');
+		if (!to || to === from) return;
+		try {
+			const r = await putJson('/api/tags/change', { from, to }, 'POST');
+			reload(`已改名，修改了 ${r.changed} 篇文章`);
+		} catch (e) { toast(e.message, true); }
+	}));
+	$('#main').querySelectorAll('[data-del]').forEach((b) => (b.onclick = async () => {
+		const tag = b.dataset.del, n = +b.dataset.count;
+		const msg = n ? `<p>会从 <b>${n} 篇文章</b>中移除这个标签（文章本身不受影响）。</p>` : '<p>这个标签还没有文章在用。</p>';
+		if (!(await dialog(`删除标签 #${tag}？`, msg, [['取消', false], ['删除', true, 'primary']]))) return;
+		try {
+			const r = await putJson('/api/tags/change', { from: tag, to: '' }, 'POST');
+			reload(r.changed ? `已删除，修改了 ${r.changed} 篇文章` : '已删除');
+		} catch (e) { toast(e.message, true); }
+	}));
+}
+
 // ---------- 事件 ----------
 $('#btn-new').onclick = () => newPost();
+$('#btn-site').onclick = showSite;
+$('#btn-tags').onclick = showTagManager;
+$('#body-zip-input').onchange = (e) => importBodyZip(e.target.files[0]);
 $('#btn-import').onclick = () => { $('#zip-input').value = ''; $('#zip-input').click(); };
 $('#zip-input').onchange = (e) => importZip(e.target.files[0]);
 $('#btn-publish').onclick = publishFlow;

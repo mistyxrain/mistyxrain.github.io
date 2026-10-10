@@ -1,10 +1,12 @@
-// 全站通用信息：改博客名字、简介、联系方式，都在这里改。
+// 全站通用信息。博客名、个签、邮箱、微信二维码在 src/site.json 里（写作工具的「站点设置」可直接修改）。
+import site from './site.json';
 
-export const SITE_TITLE = '提灯';
-export const SITE_DESCRIPTION = '命如野草，一路生花';
-export const AUTHOR = 'mistyxrain';
-export const EMAIL = 'xuanquansheng@126.com';
-export const GITHUB = 'https://github.com/mistyxrain';
+export const SITE_TITLE = site.title;
+export const SITE_DESCRIPTION = site.description;
+export const AUTHOR = site.author;
+export const EMAIL = site.email;
+export const WECHAT_QR = site.wechatQr;
+export const GITHUB = site.github;
 
 // 评论 + 阅读量服务（Waline）的地址。部署好后把网址填在这里，例如 'https://xxx.vercel.app'。
 // 留空则文章页不显示评论区和阅读量。
