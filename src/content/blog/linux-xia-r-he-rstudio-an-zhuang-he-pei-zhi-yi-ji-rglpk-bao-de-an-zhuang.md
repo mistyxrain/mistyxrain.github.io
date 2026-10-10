@@ -27,7 +27,7 @@ ll /etc/*centos*
 cat /etc/centos-release
 ```
 
-![image.png](https://b3logfile.com/siyuan/1606452548425/assets/image-20210827152419-6b7ag0g.png)
+![image.png](../../assets/posts/linux-xia-r-he-rstudio-an-zhuang-he-pei-zhi-yi-ji-rglpk-bao-de-an-zhuang/image-20210827152419-6b7ag0g.png)
 
 参考这个官方链接
 
@@ -45,6 +45,8 @@ sudo yum install rstudio-server-rhel-1.4.1717-x86_64.rpm
 ```shell
 http://<server-ip>:8787
 # 其中<server-ip>为服务器外网登录地址
+
+http://117.50.101.65:8787/
 ```
 
 #### 如果无法访问
@@ -81,23 +83,23 @@ passwd 用户名 # 即修改改用户名的密码
 retype密码
 ```
 
-![image.png](https://b3logfile.com/siyuan/1606452548425/assets/image-20210827153528-1u0nkgs.png)
+![image.png](../../assets/posts/linux-xia-r-he-rstudio-an-zhuang-he-pei-zhi-yi-ji-rglpk-bao-de-an-zhuang/image-20210827153528-1u0nkgs.png)
 
 注意，当在输入密码的时候，是不可见的
 
 需要输入两次相同的密码
 
 > 用户名为xu
-> 
+>
 > 密码为wwwxuan1
 
 在浏览器登录后即可开始操作
 
-![image.png](https://b3logfile.com/siyuan/1606452548425/assets/image-20210827154001-1potasu.png)
+![image.png](../../assets/posts/linux-xia-r-he-rstudio-an-zhuang-he-pei-zhi-yi-ji-rglpk-bao-de-an-zhuang/image-20210827154001-1potasu.png)
 
 界面还是挺友好的
 
-![image.png](https://b3logfile.com/siyuan/1606452548425/assets/image-20210827154117-pq54e3x.png)
+![image.png](../../assets/posts/linux-xia-r-he-rstudio-an-zhuang-he-pei-zhi-yi-ji-rglpk-bao-de-an-zhuang/image-20210827154117-pq54e3x.png)
 
 ### 新问题
 
@@ -105,7 +107,7 @@ retype密码
 
 安装即出现报错
 
-![image.png](https://b3logfile.com/siyuan/1606452548425/assets/image-20210827201645-li6t2ed.png)
+![image.png](../../assets/posts/linux-xia-r-he-rstudio-an-zhuang-he-pei-zhi-yi-ji-rglpk-bao-de-an-zhuang/image-20210827201645-li6t2ed.png)
 
 怀疑可能是权限的问题?
 
@@ -121,8 +123,6 @@ sudo apt-get install libglpk-dev
 
 这个方法很有可能是对的，只是因为我没有这个apr工具  
 如果要安装apt这个工具，请看[centos安装apt-get](https://blog.csdn.net/zhou_438/article/details/103671617)
-
-c
 
 Zhiying Cui的答案是对的，但是很繁琐，而且在并行的代码中，由于`foreach`的`.package`参数需要传入包，这个时候就会出问题
 
@@ -140,7 +140,7 @@ install.packages("Rglpk")
 
 一切就ok了
 
-![image.png](https://b3logfile.com/siyuan/1606452548425/assets/image-20210827203733-mcu2t85.png)
+![image.png](../../assets/posts/linux-xia-r-he-rstudio-an-zhuang-he-pei-zhi-yi-ji-rglpk-bao-de-an-zhuang/image-20210827203733-mcu2t85.png)
 
 ### 一些tip
 
@@ -158,25 +158,44 @@ chmod 777 /home/xu/DEAF  #赋予读写权限
 usermod -g root xu # 赋予xu用户权限
 
 sudo chown -R xu:xu DEAF #把所属改为xu用户
+# 补充，此时最好先切换到DEAF的上级路径，即xu 
 
-chown root /usr/lib/systemd/system/rstudio-server.service # 这个软件所属改为root
+chown root /usr/lib/systemd/system/rstudio-server.service 
+# 这个软件所属改为root
 ```
+
+补充实例：linux中R文档无法保存
+
+![image.png](../../assets/posts/linux-xia-r-he-rstudio-an-zhuang-he-pei-zhi-yi-ji-rglpk-bao-de-an-zhuang/image-20211201162044-5mvd3f9.png)
+
+sudo chown -R xu:xu FRMcomputeProject  
+cd /home/xu
+
+![image.png](../../assets/posts/linux-xia-r-he-rstudio-an-zhuang-he-pei-zhi-yi-ji-rglpk-bao-de-an-zhuang/image-20211201162304-n958mjy.png)
+
+### 重启
 
 最好重启下，方便生效
 
-![image.png](https://b3logfile.com/siyuan/1606452548425/assets/image-20210827204918-djvljmf.png)
+![image.png](../../assets/posts/linux-xia-r-he-rstudio-an-zhuang-he-pei-zhi-yi-ji-rglpk-bao-de-an-zhuang/image-20210827204918-djvljmf.png)
 
 中间绕的弯路不知道有多少，总之，感谢艾阳兄~！
 
-如果觉得页面太小，可以考虑用F11，直接全屏或退出
+### 页面太小
+
+如果觉得页面太小
+
+1 可以考虑用F11，直接全屏或退出
+
+2 在chrome中，使用`ctrl+shift+b`，即可显示或隐藏书签栏
 
 ### Xshell修改配色
 
 如果，对当前的会话进行修改 ，如今Xshell已经是免费的了
 
-![image.png](https://b3logfile.com/siyuan/1606452548425/assets/image-20210827205030-3el5kvx.png)
+![image.png](../../assets/posts/linux-xia-r-he-rstudio-an-zhuang-he-pei-zhi-yi-ji-rglpk-bao-de-an-zhuang/image-20210827205030-3el5kvx.png)
 
-![image.png](https://b3logfile.com/siyuan/1606452548425/assets/image-20210827205400-mom98c7.png)
+![image.png](../../assets/posts/linux-xia-r-he-rstudio-an-zhuang-he-pei-zhi-yi-ji-rglpk-bao-de-an-zhuang/image-20210827205400-mom98c7.png)
 
 对于Xftp，只要拖动文件，就能完成上传
 

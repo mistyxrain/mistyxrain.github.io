@@ -1,7 +1,9 @@
 ---
 import { Image } from 'astro:assets';
 import { type CollectionEntry, render } from 'astro:content';
+import Comments from '../../components/Comments.astro';
 import FormattedDate from '../../components/FormattedDate.astro';
+import { WALINE_SERVER } from '../../consts';
 import Base from '../../layouts/Base.astro';
 import { getPosts, readingMinutes, tagUrl } from '../../utils';
 
@@ -32,6 +34,7 @@ const { Content } = await render(post);
 				<FormattedDate date={pubDate} />
 				{updatedDate && <span>更新于 <FormattedDate date={updatedDate} /></span>}
 				<span>约 {readingMinutes(post.body)} 分钟读完</span>
+				{WALINE_SERVER && <span>阅读 <span class="waline-pageview-count">-</span></span>}
 				{tags.map((t) => <a href={tagUrl(t)}>#{t}</a>)}
 			</div>
 		</header>
@@ -42,6 +45,8 @@ const { Content } = await render(post);
 			<Content />
 		</div>
 	</article>
+
+	<Comments />
 
 	<nav class="pager">
 		{newer ? <a href={`/post/${newer.id}/`}><small>← 较新</small>{newer.data.title}</a> : <span />}

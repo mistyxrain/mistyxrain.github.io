@@ -6,6 +6,10 @@ export const AUTHOR = 'mistyxrain';
 export const EMAIL = 'xuanquansheng@126.com';
 export const GITHUB = 'https://github.com/mistyxrain';
 
+// 评论 + 阅读量服务（Waline）的地址。部署好后把网址填在这里，例如 'https://xxx.vercel.app'。
+// 留空则文章页不显示评论区和阅读量。
+export const WALINE_SERVER = '';
+
 // 顶部导航
 export const NAV = [
 	{ href: '/', label: '首页' },

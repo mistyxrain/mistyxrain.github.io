@@ -1,0 +1,64 @@
+---
+import { WALINE_SERVER } from '../consts';
+---
+
+{WALINE_SERVER && (
+	<section class="comments">
+		<h2>留言</h2>
+		<div id="waline" data-server={WALINE_SERVER}></div>
+	</section>
+)}
+
+<script>
+	import '@waline/client/style';
+	import { init } from '@waline/client';
+
+	const el = document.getElementById('waline');
+	if (el) {
+		init({
+			el,
+			serverURL: el.dataset.server!,
+			path: location.pathname,
+			lang: 'zh-CN',
+			meta: ['nick', 'mail', 'link'],
+			requiredMeta: ['nick', 'mail'],
+			login: 'disable',
+			imageUploader: false,
+			search: false,
+			pageview: true, // 同时统计并更新阅读量（页面上 .waline-pageview-count 处显示）
+			comment: true,
+			locale: {
+				placeholder: '欢迎留言～邮箱不会公开，我回复后你会收到邮件提醒。',
+				sofa: '还没有留言，来坐沙发吧。',
+			},
+		});
+	}
+</script>
+
+<style>
+	.comments {
+		margin-top: 56px;
+		padding-top: 24px;
+		border-top: 1px solid var(--line);
+	}
+	.comments h2 {
+		margin: 0 0 16px;
+		font-size: 1.25rem;
+	}
+	.comments :global([data-waline]) {
+		--waline-theme-color: var(--accent);
+		--waline-active-color: var(--accent);
+		--waline-color: var(--text);
+		--waline-bg-color: var(--bg);
+		--waline-bg-color-light: var(--soft);
+		--waline-bg-color-hover: var(--soft);
+		--waline-border-color: var(--line);
+		--waline-info-bg-color: var(--soft);
+		--waline-info-color: var(--muted);
+		--waline-light-grey: var(--muted);
+		--waline-dark-grey: var(--muted);
+		--waline-bq-color: var(--line);
+		--waline-badge-color: var(--accent);
+		--waline-avatar-size: 2.5rem;
+	}
+</style>
