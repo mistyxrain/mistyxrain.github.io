@@ -1,0 +1,107 @@
+---
+import { Image } from 'astro:assets';
+import { type CollectionEntry, render } from 'astro:content';
+import FormattedDate from '../../components/FormattedDate.astro';
+import Base from '../../layouts/Base.astro';
+import { getPosts, readingMinutes, tagUrl } from '../../utils';
+
+export async function getStaticPaths() {
+	const posts = await getPosts();
+	return posts.map((post, i) => ({
+		params: { slug: post.id },
+		props: { post, newer: posts[i - 1], older: posts[i + 1] },
+	}));
+}
+
+interface Props {
+	post: CollectionEntry<'blog'>;
+	newer?: CollectionEntry<'blog'>;
+	older?: CollectionEntry<'blog'>;
+}
+
+const { post, newer, older } = Astro.props;
+const { title, description, pubDate, updatedDate, heroImage, tags } = post.data;
+const { Content } = await render(post);
+---
+
+<Base title={title} description={description} image={heroImage}>
+	<article>
+		<header class="post-head">
+			<h1>{title}</h1>
+			<div class="meta">
+				<FormattedDate date={pubDate} />
+				{updatedDate && <span>更新于 <FormattedDate date={updatedDate} /></span>}
+				<span>约 {readingMinutes(post.body)} 分钟读完</span>
+				{tags.map((t) => <a href={tagUrl(t)}>#{t}</a>)}
+			</div>
+		</header>
+		{heroImage && (
+			<Image class="hero-img" src={heroImage} width={1200} alt="" loading="eager" />
+		)}
+		<div class="prose">
+			<Content />
+		</div>
+	</article>
+
+	<nav class="pager">
+		{newer ? <a href={`/post/${newer.id}/`}><small>← 较新</small>{newer.data.title}</a> : <span />}
+		{older && <a class="older" href={`/post/${older.id}/`}><small>较早 →</small>{older.data.title}</a>}
+	</nav>
+</Base>
+
+<style>
+	.post-head {
+		padding: 48px 0 24px;
+	}
+	.post-head h1 {
+		margin: 0 0 16px;
+		font-size: clamp(1.75rem, 5vw, 2.4rem);
+		line-height: 1.35;
+	}
+	.meta {
+		display: flex;
+		flex-wrap: wrap;
+		gap: 4px 16px;
+		color: var(--muted);
+		font-size: 0.875rem;
+	}
+	.meta a {
+		color: var(--muted);
+		text-decoration: none;
+	}
+	.meta a:hover {
+		color: var(--accent);
+	}
+	.hero-img {
+		display: block;
+		width: 100%;
+		height: auto;
+		aspect-ratio: 2 / 1;
+		object-fit: cover;
+		border-radius: 10px;
+		margin-bottom: 32px;
+	}
+	.pager {
+		display: grid;
+		grid-template-columns: 1fr 1fr;
+		gap: 16px;
+		margin-top: 56px;
+		padding-top: 24px;
+		border-top: 1px solid var(--line);
+	}
+	.pager a {
+		color: var(--ink);
+		text-decoration: none;
+		line-height: 1.5;
+	}
+	.pager a:hover {
+		color: var(--accent);
+	}
+	.pager small {
+		display: block;
+		color: var(--muted);
+	}
+	.pager .older {
+		text-align: right;
+	}
+</style>

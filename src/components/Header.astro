@@ -1,0 +1,136 @@
+---
+import { NAV, SITE_TITLE } from '../consts';
+
+const path = Astro.url.pathname;
+const isActive = (href: string) => (href === '/' ? path === '/' : path.startsWith(href));
+---
+
+<header class="site-header">
+	<div class="wrap">
+		<a class="brand" href="/">
+			<svg class="lantern" viewBox="0 0 24 32" aria-hidden="true">
+				<path d="M12 1v4" />
+				<path d="M8 5h8" />
+				<path class="glow" d="M6 9c0-2 2.5-4 6-4s6 2 6 4v12c0 2-2.5 4-6 4s-6-2-6-4z" />
+				<path d="M7 9h10M7 21h10" />
+				<path d="M10 25v2h4v-2M12 27v4" />
+			</svg>
+			<span>{SITE_TITLE}</span>
+		</a>
+		<nav>
+			{NAV.map(({ href, label }) => (
+				<a href={href} class:list={{ active: isActive(href) }}>{label}</a>
+			))}
+			<button id="theme-toggle" type="button" aria-label="切换深色/浅色">
+				<svg viewBox="0 0 24 24" aria-hidden="true">
+					<path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z" />
+				</svg>
+			</button>
+		</nav>
+	</div>
+</header>
+
+<script is:inline>
+	document.getElementById('theme-toggle')?.addEventListener('click', () => {
+		const root = document.documentElement;
+		const dark = root.dataset.theme
+			? root.dataset.theme === 'dark'
+			: matchMedia('(prefers-color-scheme: dark)').matches;
+		const next = dark ? 'light' : 'dark';
+		root.dataset.theme = next;
+		try { localStorage.setItem('theme', next); } catch {}
+	});
+</script>
+
+<style>
+	.site-header {
+		border-bottom: 1px solid var(--line);
+		background: color-mix(in srgb, var(--bg) 85%, transparent);
+		backdrop-filter: blur(8px);
+		position: sticky;
+		top: 0;
+		z-index: 10;
+	}
+	.wrap {
+		max-width: var(--max);
+		margin: 0 auto;
+		padding: 0 16px;
+		height: 56px;
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		gap: 12px;
+	}
+	.brand {
+		display: flex;
+		align-items: center;
+		gap: 8px;
+		font-family: var(--serif);
+		font-size: 1.25rem;
+		font-weight: 700;
+		color: var(--ink);
+		text-decoration: none;
+		letter-spacing: 0.1em;
+	}
+	.lantern {
+		width: 18px;
+		height: 24px;
+		fill: none;
+		stroke: var(--ink);
+		stroke-width: 1.5;
+		stroke-linecap: round;
+		stroke-linejoin: round;
+	}
+	.lantern .glow {
+		fill: var(--accent);
+		fill-opacity: 0.85;
+	}
+	nav {
+		display: flex;
+		align-items: center;
+		gap: 2px;
+	}
+	nav a {
+		padding: 6px 10px;
+		border-radius: 6px;
+		color: var(--muted);
+		text-decoration: none;
+		font-size: 0.95rem;
+	}
+	nav a:hover {
+		color: var(--ink);
+		background: var(--soft);
+	}
+	nav a.active {
+		color: var(--ink);
+		font-weight: 600;
+	}
+	#theme-toggle {
+		margin-left: 4px;
+		width: 34px;
+		height: 34px;
+		display: grid;
+		place-items: center;
+		border: 0;
+		border-radius: 6px;
+		background: none;
+		cursor: pointer;
+		color: var(--muted);
+	}
+	#theme-toggle:hover {
+		background: var(--soft);
+		color: var(--ink);
+	}
+	#theme-toggle svg {
+		width: 18px;
+		height: 18px;
+		fill: none;
+		stroke: currentColor;
+		stroke-width: 1.8;
+	}
+	@media (max-width: 480px) {
+		nav a {
+			padding: 6px 7px;
+		}
+	}
+</style>

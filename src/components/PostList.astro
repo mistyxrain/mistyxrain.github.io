@@ -1,0 +1,78 @@
+---
+import type { CollectionEntry } from 'astro:content';
+import { tagUrl } from '../utils';
+import FormattedDate from './FormattedDate.astro';
+
+interface Props {
+	posts: CollectionEntry<'blog'>[];
+}
+
+const { posts } = Astro.props;
+---
+
+<ul class="post-list">
+	{posts.map((post) => (
+		<li>
+			<FormattedDate date={post.data.pubDate} />
+			<div>
+				<a class="post-title" href={`/post/${post.id}/`}>{post.data.title}</a>
+				{post.data.tags.length > 0 && (
+					<span class="post-tags">
+						{post.data.tags.map((t) => <a href={tagUrl(t)}>#{t}</a>)}
+					</span>
+				)}
+			</div>
+		</li>
+	))}
+</ul>
+
+<style>
+	.post-list {
+		list-style: none;
+		margin: 0;
+		padding: 0;
+	}
+	li {
+		display: grid;
+		grid-template-columns: 6.5em 1fr;
+		gap: 16px;
+		padding: 14px 0;
+		border-bottom: 1px dashed var(--line);
+		align-items: baseline;
+	}
+	li > :global(time) {
+		color: var(--muted);
+		font-size: 0.875rem;
+		font-variant-numeric: tabular-nums;
+	}
+	.post-title {
+		color: var(--ink);
+		text-decoration: none;
+		font-size: 1.06rem;
+	}
+	.post-title:hover {
+		color: var(--accent);
+	}
+	.post-tags {
+		margin-left: 10px;
+		font-size: 0.8rem;
+	}
+	.post-tags a {
+		color: var(--muted);
+		text-decoration: none;
+		margin-right: 6px;
+	}
+	.post-tags a:hover {
+		color: var(--accent);
+	}
+	@media (max-width: 520px) {
+		li {
+			grid-template-columns: 1fr;
+			gap: 2px;
+		}
+		.post-tags {
+			display: block;
+			margin: 4px 0 0;
+		}
+	}
+</style>

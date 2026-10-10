@@ -1,0 +1,45 @@
+---
+import PostList from '../components/PostList.astro';
+import { SITE_DESCRIPTION, SITE_TITLE } from '../consts';
+import Base from '../layouts/Base.astro';
+import { getPosts } from '../utils';
+
+const posts = await getPosts();
+---
+
+<Base>
+	<section class="hero">
+		<h1>{SITE_TITLE}</h1>
+		<p>{SITE_DESCRIPTION}</p>
+	</section>
+	<h2 class="section-title">最近文章</h2>
+	<PostList posts={posts} />
+</Base>
+
+<style>
+	.hero {
+		padding: 72px 0 48px;
+	}
+	.hero h1 {
+		margin: 0;
+		font-size: clamp(2.5rem, 8vw, 3.5rem);
+		letter-spacing: 0.15em;
+	}
+	.hero h1::after {
+		content: '';
+		display: block;
+		width: 48px;
+		height: 4px;
+		margin-top: 16px;
+		border-radius: 2px;
+		background: var(--accent);
+		box-shadow: 0 0 18px var(--accent);
+	}
+	.hero p {
+		margin: 20px 0 0;
+		color: var(--muted);
+		font-family: var(--serif);
+		font-size: 1.15rem;
+		letter-spacing: 0.08em;
+	}
+</style>

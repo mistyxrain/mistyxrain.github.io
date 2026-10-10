@@ -1,0 +1,19 @@
+---
+import PostList from '../components/PostList.astro';
+import Base from '../layouts/Base.astro';
+import { getPosts } from '../utils';
+
+const posts = await getPosts();
+const years = [...new Set(posts.map((p) => p.data.pubDate.getUTCFullYear()))];
+---
+
+<Base title="归档">
+	<h1 class="page-title">归档</h1>
+	<p class="page-sub">共 {posts.length} 篇文章</p>
+	{years.map((y) => (
+		<section>
+			<h2 class="section-title">{y}</h2>
+			<PostList posts={posts.filter((p) => p.data.pubDate.getUTCFullYear() === y)} />
+		</section>
+	))}
+</Base>

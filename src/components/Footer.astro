@@ -1,0 +1,45 @@
+---
+import { AUTHOR, EMAIL, GITHUB, SITE_TITLE } from '../consts';
+
+const year = new Date().getFullYear();
+---
+
+<footer>
+	<div class="wrap">
+		<span>© {year} {SITE_TITLE} · {AUTHOR}</span>
+		<span class="links">
+			<a href={`mailto:${EMAIL}`}>邮箱</a>
+			<a href={GITHUB} target="_blank" rel="noopener">GitHub</a>
+			<a href="/rss.xml">RSS</a>
+		</span>
+	</div>
+</footer>
+
+<style>
+	footer {
+		margin-top: 64px;
+		border-top: 1px solid var(--line);
+		color: var(--muted);
+		font-size: 0.875rem;
+	}
+	.wrap {
+		max-width: var(--max);
+		margin: 0 auto;
+		padding: 24px 16px 40px;
+		display: flex;
+		flex-wrap: wrap;
+		justify-content: space-between;
+		gap: 8px 16px;
+	}
+	.links {
+		display: flex;
+		gap: 16px;
+	}
+	a {
+		color: var(--muted);
+		text-decoration: none;
+	}
+	a:hover {
+		color: var(--accent);
+	}
+</style>

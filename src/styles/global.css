@@ -1,0 +1,205 @@
+/* 提灯 — 全站样式。颜色在 :root 里统一定义，深色模式在下面覆盖。 */
+
+:root {
+	--bg: #f8f5ef;
+	--soft: #efe9de;
+	--ink: #24211c;
+	--text: #3a362f;
+	--muted: #857d70;
+	--line: #e2dacb;
+	--accent: #d9822b;
+	--code-bg: #f1ece2;
+	--max: 760px;
+	--sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Hiragino Sans GB',
+		'Microsoft YaHei', 'Noto Sans SC', sans-serif;
+	--serif: 'Songti SC', 'Noto Serif SC', 'Source Han Serif SC', 'STSong', 'SimSun', serif;
+	--mono: 'JetBrains Mono', 'Cascadia Code', Consolas, 'Courier New', monospace;
+	color-scheme: light;
+}
+
+@media (prefers-color-scheme: dark) {
+	:root:not([data-theme='light']) {
+		--bg: #17161a;
+		--soft: #232127;
+		--ink: #f1ebe0;
+		--text: #d6cfc3;
+		--muted: #8f887d;
+		--line: #2f2c33;
+		--accent: #f0a04b;
+		--code-bg: #1f1d23;
+		color-scheme: dark;
+	}
+}
+:root[data-theme='dark'] {
+	--bg: #17161a;
+	--soft: #232127;
+	--ink: #f1ebe0;
+	--text: #d6cfc3;
+	--muted: #8f887d;
+	--line: #2f2c33;
+	--accent: #f0a04b;
+	--code-bg: #1f1d23;
+	color-scheme: dark;
+}
+
+*,
+*::before,
+*::after {
+	box-sizing: border-box;
+}
+
+html {
+	-webkit-text-size-adjust: 100%;
+}
+
+body {
+	margin: 0;
+	background: var(--bg);
+	color: var(--text);
+	font-family: var(--sans);
+	font-size: 17px;
+	line-height: 1.8;
+	-webkit-font-smoothing: antialiased;
+}
+
+.container {
+	max-width: var(--max);
+	margin: 0 auto;
+	padding: 0 16px;
+}
+
+h1,
+h2,
+h3,
+h4 {
+	color: var(--ink);
+	font-family: var(--serif);
+	line-height: 1.4;
+}
+
+a {
+	color: var(--accent);
+}
+
+img {
+	max-width: 100%;
+	height: auto;
+}
+
+::selection {
+	background: color-mix(in srgb, var(--accent) 30%, transparent);
+}
+
+.page-title {
+	margin: 48px 0 4px;
+	font-size: 2rem;
+}
+.page-sub {
+	margin: 0 0 16px;
+	color: var(--muted);
+}
+.section-title {
+	margin: 40px 0 4px;
+	font-size: 1.1rem;
+	color: var(--muted);
+	font-weight: 600;
+	letter-spacing: 0.1em;
+}
+
+/* ---------- 正文排版 ---------- */
+.prose {
+	overflow-wrap: break-word;
+}
+.prose h2,
+.prose h3,
+.prose h4 {
+	margin: 2em 0 0.6em;
+}
+.prose h2 {
+	font-size: 1.5rem;
+}
+.prose h3 {
+	font-size: 1.25rem;
+}
+.prose p,
+.prose ul,
+.prose ol,
+.prose blockquote,
+.prose pre,
+.prose table {
+	margin: 0 0 1.2em;
+}
+.prose a {
+	text-underline-offset: 3px;
+}
+.prose img {
+	display: block;
+	margin: 1.5em auto;
+	border-radius: 8px;
+}
+.prose blockquote {
+	padding: 0.2em 1em;
+	border-left: 3px solid var(--accent);
+	background: var(--soft);
+	color: var(--muted);
+	border-radius: 0 6px 6px 0;
+}
+.prose blockquote p {
+	margin: 0.6em 0;
+}
+.prose hr {
+	border: 0;
+	border-top: 1px dashed var(--line);
+	margin: 2.5em 0;
+}
+.prose code {
+	font-family: var(--mono);
+	font-size: 0.88em;
+}
+.prose :not(pre) > code {
+	padding: 0.15em 0.4em;
+	border-radius: 4px;
+	background: var(--code-bg);
+	color: var(--ink);
+}
+.prose pre {
+	padding: 1em 1.2em;
+	border: 1px solid var(--line);
+	border-radius: 8px;
+	overflow-x: auto;
+	line-height: 1.6;
+	font-size: 0.9rem;
+}
+.prose table {
+	width: 100%;
+	border-collapse: collapse;
+	display: block;
+	overflow-x: auto;
+}
+.prose th,
+.prose td {
+	padding: 0.5em 0.8em;
+	border: 1px solid var(--line);
+}
+.prose th {
+	background: var(--soft);
+}
+.prose .katex-display {
+	overflow-x: auto;
+	overflow-y: hidden;
+}
+
+/* Shiki 代码高亮：浅色/深色两套 */
+.astro-code {
+	background-color: var(--code-bg) !important;
+}
+@media (prefers-color-scheme: dark) {
+	:root:not([data-theme='light']) .astro-code,
+	:root:not([data-theme='light']) .astro-code span {
+		color: var(--shiki-dark) !important;
+	}
+}
+:root[data-theme='dark'] .astro-code,
+:root[data-theme='dark'] .astro-code span {
+	color: var(--shiki-dark) !important;
+}

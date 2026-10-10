@@ -1,0 +1,12 @@
+---
+interface Props {
+	date: Date;
+}
+
+const { date } = Astro.props;
+const pad = (n: number) => String(n).padStart(2, '0');
+---
+
+<time datetime={date.toISOString()}>
+	{date.getUTCFullYear()}-{pad(date.getUTCMonth() + 1)}-{pad(date.getUTCDate())}
+</time>
