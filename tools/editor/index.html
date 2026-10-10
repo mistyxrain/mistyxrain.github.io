@@ -1,0 +1,491 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>提灯 · 写作</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 32' fill='none' stroke='%233a362f' stroke-width='1.6' stroke-linecap='round'%3E%3Cpath d='M12 1v4M8 5h8'/%3E%3Cpath fill='%23d9822b' d='M6 9c0-2 2.5-4 6-4s6 2 6 4v12c0 2-2.5 4-6 4s-6-2-6-4z'/%3E%3Cpath d='M7 9h10M7 21h10M10 25v2h4v-2M12 27v4'/%3E%3C/svg%3E" />
+<style>
+	:root {
+		--bg: #f8f5ef; --panel: #fffdf9; --soft: #efe9de; --ink: #24211c; --text: #3a362f;
+		--muted: #857d70; --line: #e2dacb; --accent: #d9822b; --accent-ink: #fff; --danger: #c0392b; --ok: #3b8a4a;
+		--sans: -apple-system, 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif;
+		--mono: 'Cascadia Code', Consolas, 'Microsoft YaHei', monospace;
+		color-scheme: light;
+	}
+	@media (prefers-color-scheme: dark) {
+		:root {
+			--bg: #17161a; --panel: #1e1d22; --soft: #29272e; --ink: #f1ebe0; --text: #d6cfc3;
+			--muted: #8f887d; --line: #34313a; --accent: #f0a04b; --accent-ink: #1a1408; color-scheme: dark;
+		}
+	}
+	* { box-sizing: border-box; }
+	html, body { height: 100%; }
+	body { margin: 0; background: var(--bg); color: var(--text); font: 14px/1.6 var(--sans); display: flex; flex-direction: column; }
+	button, input, textarea, select { font: inherit; color: inherit; }
+	button { cursor: pointer; border: 1px solid var(--line); background: var(--panel); border-radius: 6px; padding: 6px 12px; }
+	button:hover { border-color: var(--muted); }
+	button.primary { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); font-weight: 600; }
+	button.primary:hover { filter: brightness(1.05); }
+	button.ghost { border-color: transparent; background: none; color: var(--muted); }
+	button.ghost:hover { color: var(--ink); background: var(--soft); }
+	button:disabled { opacity: .5; cursor: default; }
+	input, textarea { width: 100%; border: 1px solid var(--line); background: var(--panel); border-radius: 6px; padding: 7px 10px; outline: none; }
+	input:focus, textarea:focus { border-color: var(--accent); }
+
+	header { display: flex; align-items: center; gap: 8px; padding: 10px 16px; border-bottom: 1px solid var(--line); background: var(--panel); }
+	.brand { font-weight: 700; font-size: 16px; color: var(--ink); letter-spacing: .1em; margin-right: auto; display: flex; align-items: center; gap: 8px; }
+	.brand small { font-weight: 400; color: var(--muted); letter-spacing: 0; }
+	.badge { display: inline-block; min-width: 18px; padding: 0 5px; margin-left: 4px; border-radius: 9px; background: var(--accent-ink); color: var(--accent); font-size: 12px; line-height: 18px; text-align: center; }
+
+	.layout { flex: 1; display: grid; grid-template-columns: 300px 1fr; min-height: 0; }
+	aside { border-right: 1px solid var(--line); display: flex; flex-direction: column; min-height: 0; }
+	aside .search { padding: 12px; }
+	#list { list-style: none; margin: 0; padding: 0 8px 12px; overflow: auto; flex: 1; }
+	#list li { padding: 8px 10px; border-radius: 6px; cursor: pointer; }
+	#list li:hover { background: var(--soft); }
+	#list li.active { background: var(--soft); box-shadow: inset 3px 0 var(--accent); }
+	#list .t { color: var(--ink); display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+	#list .m { color: var(--muted); font-size: 12px; }
+	.tag-draft { color: var(--accent); font-size: 12px; margin-left: 6px; }
+
+	main { overflow: auto; min-height: 0; }
+	.empty { height: 100%; display: grid; place-items: center; text-align: center; color: var(--muted); }
+	.drop { border: 2px dashed var(--line); border-radius: 12px; padding: 40px 56px; }
+	.drop b { color: var(--ink); font-size: 16px; }
+	body.dragging .drop, body.dragging main { border-color: var(--accent); }
+	#dragmask { display: none; position: fixed; inset: 0; background: color-mix(in srgb, var(--accent) 14%, transparent); border: 3px dashed var(--accent); z-index: 50; place-items: center; font-size: 20px; color: var(--ink); }
+	body.dragging #dragmask { display: grid; }
+
+	form { max-width: 980px; margin: 0 auto; padding: 20px 24px 40px; display: grid; gap: 14px; }
+	.row { display: grid; grid-template-columns: 1fr 1fr 160px; gap: 12px; }
+	label { display: grid; gap: 4px; color: var(--muted); font-size: 13px; }
+	label > span em { font-style: normal; color: var(--muted); opacity: .8; margin-left: 6px; }
+	#f-title { font-size: 20px; font-weight: 600; color: var(--ink); }
+	input[readonly] { background: var(--soft); color: var(--muted); }
+
+	.tags { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; border: 1px solid var(--line); background: var(--panel); border-radius: 6px; padding: 5px 6px; }
+	.tags:focus-within { border-color: var(--accent); }
+	.chip { display: inline-flex; align-items: center; gap: 4px; padding: 1px 4px 1px 10px; background: var(--soft); border-radius: 999px; color: var(--ink); }
+	.chip button { border: 0; background: none; padding: 0 6px; color: var(--muted); }
+	.tags input { border: 0; padding: 3px 4px; width: 120px; flex: 1; }
+	.suggest { display: flex; flex-wrap: wrap; gap: 6px; font-size: 12px; }
+	.suggest button { padding: 1px 10px; border-radius: 999px; color: var(--muted); }
+
+	.cover { display: flex; gap: 12px; align-items: center; }
+	.cover img { width: 200px; aspect-ratio: 2/1; object-fit: cover; border-radius: 6px; border: 1px solid var(--line); background: var(--soft); }
+	.cover .none { width: 200px; aspect-ratio: 2/1; border-radius: 6px; border: 1px dashed var(--line); display: grid; place-items: center; color: var(--muted); }
+	.switch { display: flex; align-items: center; gap: 8px; color: var(--text); font-size: 14px; }
+	.switch input { width: auto; }
+
+	.body-head { display: flex; align-items: center; justify-content: space-between; }
+	#f-body { min-height: 460px; font: 14px/1.7 var(--mono); resize: vertical; tab-size: 4; }
+	.actions { position: sticky; bottom: 0; display: flex; gap: 8px; align-items: center; padding: 12px 0; background: linear-gradient(transparent, var(--bg) 30%); }
+	.actions .hint { color: var(--muted); margin-right: auto; }
+	.dirty .hint { color: var(--accent); }
+
+	dialog { border: 1px solid var(--line); border-radius: 12px; background: var(--panel); color: var(--text); padding: 20px 22px; width: min(560px, 92vw); }
+	dialog::backdrop { background: rgb(0 0 0 / .35); }
+	dialog h3 { margin: 0 0 10px; color: var(--ink); }
+	dialog ul { max-height: 240px; overflow: auto; padding-left: 20px; }
+	dialog pre { max-height: 300px; overflow: auto; background: var(--soft); padding: 10px; border-radius: 6px; font: 12px/1.5 var(--mono); white-space: pre-wrap; }
+	dialog .btns { display: flex; justify-content: flex-end; gap: 8px; margin-top: 14px; }
+	#toast { position: fixed; left: 50%; bottom: 24px; transform: translateX(-50%); background: var(--ink); color: var(--bg); padding: 8px 16px; border-radius: 8px; opacity: 0; transition: opacity .2s; pointer-events: none; z-index: 60; }
+	#toast.show { opacity: 1; }
+	#toast.err { background: var(--danger); color: #fff; }
+	.muted { color: var(--muted); }
+</style>
+</head>
+<body>
+<header>
+	<div class="brand">🏮 提灯 <small>· 本地写作</small></div>
+	<button type="button" id="btn-new">＋ 新建文章</button>
+	<button type="button" id="btn-import">导入思源 zip</button>
+	<button type="button" class="primary" id="btn-publish">发布到网站<span class="badge" id="pub-count" hidden></span></button>
+	<input type="file" id="zip-input" accept=".zip" hidden />
+	<input type="file" id="img-input" accept="image/*" hidden />
+</header>
+
+<div class="layout">
+	<aside>
+		<div class="search"><input id="search" placeholder="搜索标题或标签…" /></div>
+		<ul id="list"></ul>
+	</aside>
+	<main id="main">
+		<div class="empty">
+			<div class="drop">
+				<b>把思源导出的 zip 拖到这里</b>
+				<p>或点上方「新建文章」「导入思源 zip」<br />左侧选择一篇文章即可编辑</p>
+			</div>
+		</div>
+	</main>
+</div>
+
+<template id="tpl-editor">
+	<form autocomplete="off">
+		<label><span>标题</span><input id="f-title" required /></label>
+		<div class="row">
+			<label><span>网址名<em id="slug-hint"></em></span><input id="f-slug" pattern="[a-z0-9][a-z0-9\-]*" required /></label>
+			<label><span>简介<em>（显示在搜索结果和分享卡片里）</em></span><input id="f-desc" /></label>
+			<label><span>发布日期</span><input id="f-date" type="date" required /></label>
+		</div>
+		<label><span>标签<em>（输入后按回车）</em></span>
+			<div class="tags" id="tags"><input id="tag-input" placeholder="添加标签" /></div>
+		</label>
+		<div class="suggest" id="tag-suggest"></div>
+		<div class="row" style="grid-template-columns: 1fr auto; align-items: end">
+			<label><span>封面图</span>
+				<div class="cover">
+					<span id="cover-view"></span>
+					<button type="button" id="btn-cover">选择图片…</button>
+					<button type="button" class="ghost" id="btn-cover-rm">移除</button>
+				</div>
+			</label>
+			<label class="switch"><input type="checkbox" id="f-draft" /> 草稿（暂不发布到网上）</label>
+		</div>
+		<div class="body-head">
+			<span class="muted">正文（Markdown）</span>
+			<button type="button" class="ghost" id="btn-insert-img">插入图片…</button>
+		</div>
+		<textarea id="f-body" spellcheck="false"></textarea>
+		<div class="actions">
+			<span class="hint" id="save-hint">已保存</span>
+			<button type="button" id="btn-preview">预览</button>
+			<button type="submit" class="primary">保存</button>
+		</div>
+	</form>
+</template>
+
+<dialog id="dlg">
+	<h3 id="dlg-title"></h3>
+	<div id="dlg-body"></div>
+	<div class="btns" id="dlg-btns"></div>
+</dialog>
+<div id="dragmask">松开鼠标，导入思源文档</div>
+<div id="toast"></div>
+
+<script>
+const $ = (s, el = document) => el.querySelector(s);
+const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
+const today = () => { const d = new Date(), p = (n) => String(n).padStart(2, '0'); return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`; };
+
+let posts = [], allTags = [], cur = null, dirty = false, previewPort = 4321, slugTimer;
+
+async function api(path, opts = {}) {
+	const r = await fetch(path, opts);
+	const data = await r.json().catch(() => ({}));
+	if (!r.ok) throw new Error(data.error || `请求失败（${r.status}）`);
+	return data;
+}
+
+function toast(msg, err) {
+	const t = $('#toast');
+	t.textContent = msg;
+	t.className = err ? 'show err' : 'show';
+	clearTimeout(t._h);
+	t._h = setTimeout(() => (t.className = ''), err ? 4000 : 2000);
+}
+
+function dialog(title, html, buttons) {
+	return new Promise((resolve) => {
+		const d = $('#dlg');
+		$('#dlg-title').textContent = title;
+		$('#dlg-body').innerHTML = html;
+		const box = $('#dlg-btns');
+		box.innerHTML = '';
+		for (const [label, value, cls] of buttons) {
+			const b = document.createElement('button');
+			b.type = 'button';
+			b.textContent = label;
+			if (cls) b.className = cls;
+			b.onclick = () => { d.close(); resolve(value); };
+			box.append(b);
+		}
+		d.onclose = () => resolve(d.returnValue === 'esc' ? null : undefined);
+		d.showModal();
+	});
+}
+
+async function confirmLeave() {
+	if (!dirty) return true;
+	return (await dialog('有未保存的修改', '<p>当前文章的修改还没保存，确定要离开吗？</p>', [['取消', false], ['放弃修改', true, 'primary']])) === true;
+}
+
+// ---------- 列表 ----------
+async function loadList() {
+	[posts, allTags] = await Promise.all([api('/api/posts'), api('/api/tags')]);
+	renderList();
+	refreshPublishCount();
+}
+
+function renderList() {
+	const q = $('#search').value.trim().toLowerCase();
+	const ul = $('#list');
+	ul.innerHTML = '';
+	for (const p of posts) {
+		if (q && !(p.title.toLowerCase().includes(q) || p.tags.some((t) => t.toLowerCase().includes(q)))) continue;
+		const li = document.createElement('li');
+		if (cur && !cur.isNew && cur.slug === p.slug) li.className = 'active';
+		li.innerHTML = `<span class="t">${esc(p.title)}</span>
+			<span class="m">${esc(p.pubDate)}${p.tags.length ? ' · ' + p.tags.map((t) => '#' + esc(t)).join(' ') : ''}${p.draft ? '<span class="tag-draft">草稿</span>' : ''}</span>`;
+		li.onclick = () => openPost(p.slug);
+		ul.append(li);
+	}
+}
+
+async function refreshPublishCount() {
+	try {
+		const s = await api('/api/status');
+		const b = $('#pub-count');
+		b.hidden = !s.changes.length;
+		b.textContent = s.posts.length || s.changes.length;
+	} catch {}
+}
+
+// ---------- 编辑器 ----------
+async function openPost(slug) {
+	if (!(await confirmLeave())) return;
+	try {
+		showEditor({ ...(await api('/api/posts/' + encodeURIComponent(slug))), isNew: false });
+	} catch (e) { toast(e.message, true); }
+}
+
+async function newPost(data = {}) {
+	if (!(await confirmLeave())) return;
+	showEditor({ slug: '', title: '', description: '', pubDate: today(), tags: [], draft: true, heroImage: '', body: '', ...data, isNew: true });
+	setDirty(true);
+}
+
+function showEditor(post) {
+	cur = post;
+	const main = $('#main');
+	main.innerHTML = '';
+	main.append($('#tpl-editor').content.cloneNode(true));
+	const f = $('form', main);
+	$('#f-title').value = post.title;
+	$('#f-slug').value = post.slug;
+	$('#f-slug').readOnly = !post.isNew;
+	$('#slug-hint').textContent = post.isNew ? '（文章网址 /post/网址名/，只能用小写字母、数字、短横线）' : '（已发布文章的网址不能修改）';
+	$('#f-desc').value = post.description;
+	$('#f-date').value = post.pubDate;
+	$('#f-draft').checked = post.draft;
+	$('#f-body').value = post.body;
+	renderTags();
+	renderCover();
+	setDirty(false);
+
+	f.addEventListener('input', () => setDirty(true));
+	$('#f-title').addEventListener('input', () => {
+		// 新文章：标题变了就自动生成网址名（用户手动改过就不再覆盖）
+		if (!post.isNew || $('#f-slug').dataset.touched) return;
+		clearTimeout(slugTimer);
+		slugTimer = setTimeout(async () => {
+			const { slug } = await api('/api/slug?title=' + encodeURIComponent($('#f-title').value)).catch(() => ({}));
+			if (slug && !$('#f-slug').dataset.touched) $('#f-slug').value = slug;
+		}, 300);
+	});
+	$('#f-slug').addEventListener('input', (e) => (e.target.dataset.touched = '1'));
+	$('#tag-input').addEventListener('keydown', (e) => {
+		if (e.key === 'Enter' || e.key === ',' || e.key === '，') {
+			e.preventDefault();
+			addTag(e.target.value);
+			e.target.value = '';
+		} else if (e.key === 'Backspace' && !e.target.value && cur.tags.length) {
+			cur.tags.pop();
+			renderTags();
+			setDirty(true);
+		}
+	});
+	$('#tag-input').addEventListener('blur', (e) => { if (e.target.value.trim()) { addTag(e.target.value); e.target.value = ''; } });
+	$('#btn-cover').onclick = () => pickImage(async (path) => { cur.heroImage = path; renderCover(); setDirty(true); });
+	$('#btn-cover-rm').onclick = () => { cur.heroImage = ''; renderCover(); setDirty(true); };
+	$('#btn-insert-img').onclick = () => pickImage((path, name) => insertAtCursor(`\n![${name.replace(/\.[^.]+$/, '')}](${path})\n`));
+	$('#btn-preview').onclick = preview;
+	f.addEventListener('submit', (e) => { e.preventDefault(); save(); });
+	renderList();
+	main.scrollTop = 0;
+	if (post.isNew && !post.title) $('#f-title').focus();
+}
+
+function setDirty(v) {
+	dirty = v;
+	const f = $('form');
+	if (!f) return;
+	f.classList.toggle('dirty', v);
+	$('#save-hint').textContent = v ? '有未保存的修改（Ctrl+S 保存）' : '已保存';
+}
+
+function addTag(t) {
+	t = t.trim().replace(/^#/, '');
+	if (!t || cur.tags.includes(t)) return;
+	cur.tags.push(t);
+	renderTags();
+	setDirty(true);
+}
+
+function renderTags() {
+	const box = $('#tags');
+	box.querySelectorAll('.chip').forEach((c) => c.remove());
+	for (const t of cur.tags) {
+		const c = document.createElement('span');
+		c.className = 'chip';
+		c.innerHTML = `${esc(t)}<button type="button" title="移除">×</button>`;
+		c.querySelector('button').onclick = () => { cur.tags = cur.tags.filter((x) => x !== t); renderTags(); setDirty(true); };
+		box.insertBefore(c, $('#tag-input'));
+	}
+	const sug = $('#tag-suggest');
+	sug.innerHTML = '';
+	const rest = allTags.filter((t) => !cur.tags.includes(t));
+	if (rest.length) sug.insertAdjacentHTML('beforeend', '<span class="muted">已有标签：</span>');
+	for (const t of rest) {
+		const b = document.createElement('button');
+		b.type = 'button';
+		b.textContent = '#' + t;
+		b.onclick = () => addTag(t);
+		sug.append(b);
+	}
+}
+
+function renderCover() {
+	$('#cover-view').innerHTML = cur.heroImage
+		? `<img src="/api/image?path=${encodeURIComponent(cur.heroImage)}" alt="" />`
+		: '<span class="none">无封面</span>';
+}
+
+function currentSlug() {
+	return $('#f-slug').value.trim();
+}
+
+function pickImage(onDone) {
+	const slug = cur.isNew ? cur.assetSlug || currentSlug() : cur.slug;
+	if (!/^[a-z0-9][a-z0-9-]*$/.test(slug)) return toast('请先填写标题或网址名', true);
+	if (cur.isNew && !cur.assetSlug) cur.assetSlug = slug;
+	const input = $('#img-input');
+	input.value = '';
+	input.onchange = async () => {
+		const file = input.files[0];
+		if (!file) return;
+		try {
+			const r = await api(`/api/upload?slug=${encodeURIComponent(slug)}&name=${encodeURIComponent(file.name)}${cur.isNew ? '&new=1' : ''}`, { method: 'POST', body: file });
+			onDone(r.path, file.name);
+		} catch (e) { toast(e.message, true); }
+	};
+	input.click();
+}
+
+function insertAtCursor(text) {
+	const ta = $('#f-body');
+	const s = ta.selectionStart, e = ta.selectionEnd;
+	ta.setRangeText(text, s, e, 'end');
+	ta.focus();
+	setDirty(true);
+}
+
+async function save() {
+	const f = $('form');
+	if (!f.reportValidity()) return false;
+	const slug = currentSlug();
+	const data = {
+		isNew: cur.isNew,
+		assetSlug: cur.assetSlug,
+		title: $('#f-title').value,
+		description: $('#f-desc').value,
+		pubDate: $('#f-date').value,
+		updatedDate: cur.updatedDate || '',
+		tags: cur.tags,
+		draft: $('#f-draft').checked,
+		heroImage: cur.heroImage,
+		body: $('#f-body').value,
+	};
+	try {
+		const saved = await api('/api/posts/' + encodeURIComponent(slug), { method: 'PUT', headers: { 'content-type': 'application/json' }, body: JSON.stringify(data) });
+		await loadList();
+		showEditor({ ...saved, isNew: false });
+		toast(data.draft ? '已保存（草稿，不会发布）' : '已保存');
+		return true;
+	} catch (e) {
+		toast(e.message, true);
+		return false;
+	}
+}
+
+async function preview() {
+	if (dirty || cur.isNew) { if (!(await save())) return; }
+	window.open(`http://localhost:${previewPort}/post/${cur.slug}/`, '_blank');
+}
+
+// ---------- 导入思源 ----------
+async function importZip(file) {
+	if (!file || !/\.zip$/i.test(file.name)) return toast('请选择思源导出的 .zip 文件', true);
+	if (!(await confirmLeave())) return;
+	toast('正在导入…');
+	try {
+		const r = await api('/api/import', { method: 'POST', body: file });
+		dirty = false;
+		await newPost(r);
+		$('#f-slug').dataset.touched = '1';
+		const { images, files, extraMd } = r.imported;
+		toast(`已导入：${images} 张图片${files ? `、${files} 个附件` : ''}。检查无误后点「保存」`);
+		if (extraMd > 0) dialog('提示', `<p>这个 zip 里有 ${extraMd + 1} 篇文档，只导入了第一篇。其余的请在思源里单独导出。</p>`, [['知道了', 0, 'primary']]);
+	} catch (e) { toast(e.message, true); }
+}
+
+// ---------- 发布 ----------
+async function publishFlow() {
+	if (dirty && !(await save())) return;
+	let s;
+	try { s = await api('/api/status'); } catch (e) { return toast(e.message, true); }
+	if (!s.changes.length) return dialog('没有需要发布的内容', '<p>网站上已经是最新的了。</p>', [['好的', 0, 'primary']]);
+	const titleOf = (slug) => posts.find((p) => p.slug === slug)?.title || slug;
+	const drafts = s.posts.filter((sl) => posts.find((p) => p.slug === sl)?.draft);
+	const html = `
+		${s.posts.length ? `<p>涉及这些文章：</p><ul>${s.posts.map((sl) => `<li>${esc(titleOf(sl))}${drafts.includes(sl) ? ' <span class="tag-draft">草稿，网上不会显示</span>' : ''}</li>`).join('')}</ul>` : ''}
+		<p class="muted">共 ${s.changes.length} 个文件改动。发布后约 1～2 分钟网站更新。</p>
+		<label><span>这次更新的说明（可不填）</span><input id="pub-msg" placeholder="例如：新文章：xxx" /></label>`;
+	const ok = await dialog('确定发布到网站吗？', html, [['取消', false], ['发布', true, 'primary']]);
+	const msg = $('#pub-msg')?.value.trim();
+	if (!ok) return;
+	const btn = $('#btn-publish');
+	btn.disabled = true;
+	btn.firstChild.textContent = '发布中…';
+	try {
+		const r = await api('/api/publish', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ message: msg }) });
+		if (r.ok) dialog('发布成功 🎉', '<p>约 1～2 分钟后刷新 <a href="https://mistyxrain.github.io/" target="_blank">mistyxrain.github.io</a> 即可看到。</p>', [['好的', 0, 'primary']]);
+		else dialog('发布失败', `<p>下面是详细信息，可以截图发给 Claude：</p><pre>${esc(r.log)}</pre>`, [['关闭', 0, 'primary']]);
+	} catch (e) {
+		toast(e.message, true);
+	} finally {
+		btn.disabled = false;
+		btn.firstChild.textContent = '发布到网站';
+		refreshPublishCount();
+	}
+}
+
+// ---------- 事件 ----------
+$('#btn-new').onclick = () => newPost();
+$('#btn-import').onclick = () => { $('#zip-input').value = ''; $('#zip-input').click(); };
+$('#zip-input').onchange = (e) => importZip(e.target.files[0]);
+$('#btn-publish').onclick = publishFlow;
+$('#search').oninput = renderList;
+document.addEventListener('keydown', (e) => {
+	if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 's' && $('form')) { e.preventDefault(); save(); }
+});
+window.addEventListener('beforeunload', (e) => { if (dirty) e.preventDefault(); });
+
+let dragDepth = 0;
+document.addEventListener('dragenter', (e) => { if (e.dataTransfer?.types.includes('Files')) { dragDepth++; document.body.classList.add('dragging'); } });
+document.addEventListener('dragleave', () => { if (--dragDepth <= 0) { dragDepth = 0; document.body.classList.remove('dragging'); } });
+document.addEventListener('dragover', (e) => e.preventDefault());
+document.addEventListener('drop', (e) => {
+	e.preventDefault();
+	dragDepth = 0;
+	document.body.classList.remove('dragging');
+	const file = e.dataTransfer.files[0];
+	if (file) importZip(file);
+});
+
+api('/api/config').then((c) => (previewPort = c.previewPort)).catch(() => {});
+loadList().catch((e) => toast(e.message, true));
+</script>
+</body>
+</html>

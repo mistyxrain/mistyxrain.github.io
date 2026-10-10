@@ -1,7 +1,8 @@
 import { getCollection } from 'astro:content';
 
 export async function getPosts() {
-	const posts = await getCollection('blog', ({ data }) => !data.draft);
+	// 草稿只在本地预览（npm run dev）时显示，不会发布到网上
+	const posts = await getCollection('blog', ({ data }) => import.meta.env.DEV || !data.draft);
 	return posts.sort((a, b) => b.data.pubDate.valueOf() - a.data.pubDate.valueOf());
 }
 
