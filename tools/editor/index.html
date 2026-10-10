@@ -4,6 +4,8 @@
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width,initial-scale=1" />
 <title>提灯 · 写作</title>
+<link rel="stylesheet" href="/vendor/vditor/dist/index.css" />
+<script src="/vendor/vditor/dist/index.min.js"></script>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 32' fill='none' stroke='%233a362f' stroke-width='1.6' stroke-linecap='round'%3E%3Cpath d='M12 1v4M8 5h8'/%3E%3Cpath fill='%23d9822b' d='M6 9c0-2 2.5-4 6-4s6 2 6 4v12c0 2-2.5 4-6 4s-6-2-6-4z'/%3E%3Cpath d='M7 9h10M7 21h10M10 25v2h4v-2M12 27v4'/%3E%3C/svg%3E" />
 <style>
 	:root {
@@ -81,7 +83,10 @@
 	.switch input { width: auto; }
 
 	.body-head { display: flex; align-items: center; justify-content: space-between; }
-	#f-body { min-height: 460px; font: 14px/1.7 var(--mono); resize: vertical; tab-size: 4; }
+	#f-body { border-radius: 6px; }
+	#f-body.vditor { border-color: var(--line); --panel-background-color: var(--panel); --toolbar-background-color: var(--soft); }
+	#f-body .vditor-reset { font-family: var(--sans); font-size: 15px; line-height: 1.8; color: var(--text); }
+	#f-body .vditor-toolbar { padding-left: 6px !important; }
 	.actions { position: sticky; bottom: 0; display: flex; gap: 8px; align-items: center; padding: 12px 0; background: linear-gradient(transparent, var(--bg) 30%); }
 	.actions .hint { color: var(--muted); margin-right: auto; }
 	.dirty .hint { color: var(--accent); }
@@ -175,7 +180,7 @@
 				<button type="button" class="ghost" id="btn-insert-img">插入图片…</button>
 			</span>
 		</div>
-		<textarea id="f-body" spellcheck="false"></textarea>
+		<div id="f-body"></div>
 		<div class="actions">
 			<button type="button" class="ghost danger" id="btn-delete">删除文章</button>
 			<span class="hint" id="save-hint">已保存</span>
@@ -199,6 +204,59 @@ const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '
 const today = () => { const d = new Date(), p = (n) => String(n).padStart(2, '0'); return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`; };
 
 let posts = [], allTags = [], cur = null, dirty = false, previewPort = 4321, slugTimer;
+let vd = null; // 正文编辑器（Vditor）
+
+const getBody = () => (vd ? vd.getValue() : cur?.body || '');
+const setBody = (md) => { if (vd) vd.setValue(md, true); };
+
+// 换页面前销毁旧的编辑器
+function clearMain() {
+	if (vd) { try { vd.destroy(); } catch {} vd = null; }
+	$('#main').innerHTML = '';
+}
+
+function createBodyEditor(body) {
+	const dark = matchMedia('(prefers-color-scheme: dark)').matches;
+	vd = new Vditor('f-body', {
+		cdn: '/vendor/vditor',
+		lang: 'zh_CN',
+		mode: 'wysiwyg',
+		value: body,
+		minHeight: 520,
+		cache: { enable: false },
+		theme: dark ? 'dark' : 'classic',
+		placeholder: '在这里写正文…（也可以用上方「从思源 zip 导入正文」）',
+		counter: { enable: true },
+		toolbarConfig: { pin: true },
+		toolbar: ['headings', 'bold', 'italic', 'strike', '|', 'list', 'ordered-list', 'check', 'quote', 'line', '|', 'link', 'table', 'code', 'inline-code', '|',
+			{ name: 'insert-image', tip: '插入图片', icon: '<svg viewBox="0 0 24 24"><path fill="currentColor" d="M21 19V5a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2zM8.5 13.5l2.5 3 3.5-4.5 4.5 6H5l3.5-4.5z"/></svg>', click: () => $('#btn-insert-img').click() },
+			'|', 'undo', 'redo', '|', 'edit-mode', 'fullscreen', 'outline'],
+		preview: {
+			// 正文里的图片写的是 ../../assets/posts/...，加上这个前缀后编辑器里就能显示
+			markdown: { linkBase: location.origin + '/_/_/', mark: true, autoSpace: false, fixTermTypo: false },
+			math: { engine: 'KaTeX', inlineDigit: true },
+			hljs: { style: dark ? 'github-dark' : 'github' },
+			theme: { current: dark ? 'dark' : 'light' },
+		},
+		upload: {
+			accept: 'image/*',
+			// 拖进 / 粘贴进编辑器的图片：存到临时区，插入正文
+			handler: async (files) => {
+				const key = assetKey();
+				if (!key) { toast('请先填写标题或网址名', true); return null; }
+				for (const file of files) {
+					try {
+						const r = await api(`/api/upload?slug=${encodeURIComponent(key)}&name=${encodeURIComponent(file.name || 'image.png')}`, { method: 'POST', body: file });
+						vd.insertValue(`\n![${(file.name || 'image').replace(/\.[^.]+$/, '')}](${r.path})\n`);
+					} catch (e) { toast(e.message, true); }
+				}
+				return null;
+			},
+		},
+		input: () => setDirty(true),
+		after: () => setDirty(!!cur?.isNew && !!body),
+	});
+}
 
 async function api(path, opts = {}) {
 	const r = await fetch(path, opts);
@@ -302,7 +360,7 @@ async function newPost(data = {}) {
 function showEditor(post) {
 	cur = post;
 	const main = $('#main');
-	main.innerHTML = '';
+	clearMain();
 	main.append($('#tpl-editor').content.cloneNode(true));
 	const f = $('form', main);
 	$('#f-title').value = post.title;
@@ -316,12 +374,12 @@ function showEditor(post) {
 	$('#btn-delete').hidden = post.isNew;
 	$('#btn-delete').onclick = deletePost;
 	$('#f-draft').checked = post.draft;
-	$('#f-body').value = post.body;
+	createBodyEditor(post.body);
 	renderTags();
 	renderCover();
 	setDirty(false);
 
-	f.addEventListener('input', () => setDirty(true));
+	f.addEventListener('input', (e) => { if (!e.target.closest('#f-body')) setDirty(true); });
 	$('#f-title').addEventListener('input', () => {
 		// 新文章：标题变了就自动生成网址名（用户手动改过就不再覆盖）
 		if (!post.isNew || $('#f-slug').dataset.touched) return;
@@ -430,7 +488,7 @@ function pickImage(onDone) {
 
 // 封面：从正文里已有的图片中挑，或上传新图
 async function chooseCover() {
-	const body = $('#f-body').value;
+	const body = getBody();
 	const found = [...body.matchAll(/\]\((\.\.\/\.\.\/assets\/posts\/[^)\s]+)\)|src=["'](\.\.\/\.\.\/assets\/posts\/[^"']+)["']/g)];
 	const imgs = [...new Set(found.map((m) => m[1] || m[2]))];
 	const grid = imgs.length
@@ -446,7 +504,7 @@ async function chooseCover() {
 // 把思源 zip 的内容导入到当前文章的正文（标题、简介、封面为空时也一并填上）
 async function importBodyZip(file) {
 	if (!file || !/\.zip$/i.test(file.name)) return toast('请选择思源导出的 .zip 文件', true);
-	if ($('#f-body').value.trim()) {
+	if (getBody().trim()) {
 		const ok = await dialog('替换正文？', '<p>导入会<b>替换</b>当前正文内容。不满意的话，不点保存、直接切到别的文章即可放弃。</p>', [['取消', false], ['替换', true, 'primary']]);
 		if (!ok) return;
 	}
@@ -457,7 +515,7 @@ async function importBodyZip(file) {
 			cur.assetSlug = r.assetSlug;
 			if (!currentSlug()) $('#f-slug').value = r.slug;
 		}
-		$('#f-body').value = r.body;
+		setBody(r.body);
 		if (!$('#f-title').value.trim()) $('#f-title').value = r.title;
 		if (!$('#f-desc').value.trim()) $('#f-desc').value = r.description;
 		if (!cur.heroImage && r.heroImage) { cur.heroImage = r.heroImage; renderCover(); }
@@ -467,10 +525,9 @@ async function importBodyZip(file) {
 }
 
 function insertAtCursor(text) {
-	const ta = $('#f-body');
-	const s = ta.selectionStart, e = ta.selectionEnd;
-	ta.setRangeText(text, s, e, 'end');
-	ta.focus();
+	if (!vd) return;
+	vd.focus();
+	vd.insertValue(text);
 	setDirty(true);
 }
 
@@ -488,7 +545,7 @@ async function save() {
 		tags: cur.tags,
 		draft: $('#f-draft').checked,
 		heroImage: cur.heroImage,
-		body: $('#f-body').value,
+		body: getBody(),
 	};
 	try {
 		const saved = await api('/api/posts/' + encodeURIComponent(slug), { method: 'PUT', headers: { 'content-type': 'application/json' }, body: JSON.stringify(data) });
@@ -565,6 +622,7 @@ async function showSite() {
 	cur = null;
 	dirty = false;
 	renderList();
+	clearMain();
 	$('#main').innerHTML = `
 		<form class="panel" id="site-form" autocomplete="off">
 			<h2>站点设置</h2>
@@ -624,6 +682,7 @@ async function showTagManager() {
 				<button type="button" class="ghost danger" data-del="${esc(t.name)}" data-count="${t.count}">删除</button></td>
 		</tr>`)
 		.join('');
+	clearMain();
 	$('#main').innerHTML = `
 		<div class="panel">
 			<h2>标签管理</h2>
@@ -697,6 +756,7 @@ async function showTrash() {
 				<button type="button" class="ghost danger" data-purge="${esc(t.id)}" data-title="${esc(t.title)}">彻底删除</button></td>
 		</tr>`)
 		.join('');
+	clearMain();
 	$('#main').innerHTML = `
 		<div class="panel">
 			<h2>回收站</h2>

@@ -398,6 +398,16 @@ async function proxyArgs() {
 async function gitStatus() {
 	const { out } = await run('git', ['-c', 'core.quotepath=false', 'status', '--porcelain', '-uall']);
 	const changes = out.split('\n').filter(Boolean).map((l) => ({ code: l.slice(0, 2).trim(), file: l.slice(3).replace(/^"|"$/g, '') }));
+	// 已经提交、但还没推送到 GitHub 的改动也算待发布
+	const ahead = Number((await run('git', ['rev-list', '--count', 'origin/main..HEAD'])).out.trim()) || 0;
+	if (ahead) {
+		const { out: diff } = await run('git', ['-c', 'core.quotepath=false', 'diff', '--name-status', 'origin/main..HEAD']);
+		for (const l of diff.split('\n').filter(Boolean)) {
+			const [code, ...rest] = l.split('\t');
+			const file = rest.at(-1);
+			if (!changes.some((c) => c.file === file)) changes.push({ code: code[0], file });
+		}
+	}
 	const posts = new Set();
 	const deleted = [];
 	for (const c of changes) {
@@ -405,7 +415,7 @@ async function gitStatus() {
 		if (m) posts.add(m[1] || m[2] || m[3]);
 		if (m?.[1] && c.code === 'D') deleted.push(m[1]);
 	}
-	return { changes, posts: [...posts], deleted };
+	return { changes, posts: [...posts], deleted, ahead };
 }
 
 async function publish(message) {
@@ -454,6 +464,19 @@ const json = (res, status, data) => {
 };
 
 const MIME = { '.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.gif': 'image/gif', '.webp': 'image/webp', '.avif': 'image/avif', '.svg': 'image/svg+xml' };
+const STATIC_MIME = { ...MIME, '.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8', '.json': 'application/json', '.woff': 'font/woff', '.woff2': 'font/woff2', '.ttf': 'font/ttf' };
+
+// "assets/posts/<目录>/<文件>" → 实际文件：先找正式目录，没有再找临时区
+function resolvePostImage(rel) {
+	let file = path.resolve(ROOT, 'src', rel);
+	if (!file.startsWith(IMG_DIR + path.sep)) throw httpError(404, 'not found');
+	if (!fs.existsSync(file)) {
+		const [key, ...rest] = path.relative(IMG_DIR, file).split(path.sep);
+		file = path.join(stageImg(key), ...rest);
+		if (!file.startsWith(STAGE_DIR + path.sep) || !fs.existsSync(file)) throw httpError(404, 'not found');
+	}
+	return file;
+}
 
 async function handle(req, res) {
 	// 只接受本机页面发来的请求，防止其他网站借浏览器调用本工具
@@ -470,6 +493,20 @@ async function handle(req, res) {
 	if (req.method === 'GET' && (p === '/' || p === '/index.html')) {
 		res.writeHead(200, { 'content-type': 'text/html; charset=utf-8' });
 		return res.end(fs.readFileSync(path.join(HERE, 'index.html')));
+	}
+	// 所见即所得编辑器 Vditor 的脚本、样式（从本地 node_modules 提供，不依赖网络）
+	if (req.method === 'GET' && p.startsWith('/vendor/vditor/')) {
+		const base = path.join(ROOT, 'node_modules', 'vditor');
+		const file = path.join(base, decodeURIComponent(p.slice('/vendor/vditor/'.length)));
+		if (!file.startsWith(base + path.sep) || !fs.existsSync(file) || !fs.statSync(file).isFile()) throw httpError(404, 'not found');
+		res.writeHead(200, { 'content-type': STATIC_MIME[path.extname(file).toLowerCase()] || 'application/octet-stream', 'cache-control': 'max-age=86400' });
+		return res.end(fs.readFileSync(file));
+	}
+	// 让编辑器里正文的图片（../../assets/posts/...）能显示；没保存的新图片从临时区取
+	if (req.method === 'GET' && p.startsWith('/assets/posts/')) {
+		const file = resolvePostImage(decodeURIComponent(p.slice(1)));
+		res.writeHead(200, { 'content-type': MIME[path.extname(file).toLowerCase()] || 'application/octet-stream', 'cache-control': 'no-store' });
+		return res.end(fs.readFileSync(file));
 	}
 	if (req.method === 'GET' && p === '/api/posts') return json(res, 200, listPosts());
 	if (req.method === 'GET' && p === '/api/tags') return json(res, 200, tagStats());
@@ -510,14 +547,7 @@ async function handle(req, res) {
 	}
 	if (req.method === 'GET' && p === '/api/image') {
 		// 给界面显示缩略图：只允许读 src/assets/posts 下的图片
-		const rel = (url.searchParams.get('path') || '').replace(/^(\.\.\/)+/, '');
-		let file = path.resolve(ROOT, 'src', rel);
-		if (!file.startsWith(IMG_DIR + path.sep)) throw httpError(404, 'not found');
-		if (!fs.existsSync(file)) {
-			const [key, ...rest] = path.relative(IMG_DIR, file).split(path.sep);
-			file = path.join(stageImg(key), ...rest);
-			if (!file.startsWith(STAGE_DIR + path.sep) || !fs.existsSync(file)) throw httpError(404, 'not found');
-		}
+		const file = resolvePostImage((url.searchParams.get('path') || '').replace(/^(\.\.\/)+/, ''));
 		res.writeHead(200, { 'content-type': MIME[path.extname(file).toLowerCase()] || 'application/octet-stream' });
 		return res.end(fs.readFileSync(file));
 	}
