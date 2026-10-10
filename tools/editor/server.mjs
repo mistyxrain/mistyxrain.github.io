@@ -331,24 +331,42 @@ function purgeTrash(id) {
 const readSite = () => JSON.parse(fs.readFileSync(SITE_FILE, 'utf8'));
 const writeSite = (site) => fs.writeFileSync(SITE_FILE, `${JSON.stringify(site, null, 2)}\n`);
 
+const DEFAULT_HERO_BG = '/images/hero-bg.jpg'; // 默认的孔明灯背景，换图时保留它，方便「恢复默认」
+const SITE_IMAGES = { wechatQr: 'wechat-qr', heroBg: 'hero-bg' };
+
+// 删除站点设置里不再使用的上传图片（默认背景除外）
+function removeSiteImage(url) {
+	if (!url || url === DEFAULT_HERO_BG) return;
+	const file = path.join(PUBLIC_DIR, url);
+	if (file.startsWith(path.join(PUBLIC_DIR, 'images') + path.sep) && fs.existsSync(file)) fs.rmSync(file);
+}
+
 function updateSite(input) {
 	const site = readSite();
 	for (const k of ['title', 'description', 'email']) if (typeof input[k] === 'string') site[k] = input[k].trim();
+	if (input.heroBgOpacity !== undefined) site.heroBgOpacity = Math.round(Math.min(1, Math.max(0, Number(input.heroBgOpacity) || 0)) * 100) / 100;
+	if (input.heroBg === '' || input.heroBg === DEFAULT_HERO_BG) {
+		if (site.heroBg !== input.heroBg) removeSiteImage(site.heroBg);
+		site.heroBg = input.heroBg;
+	}
 	if (!site.title) throw httpError(400, '博客名不能为空');
 	if (Array.isArray(input.presetTags)) site.presetTags = [...new Set(input.presetTags.map((t) => String(t).trim()).filter(Boolean))];
 	writeSite(site);
 	return site;
 }
 
-function saveWechatQr(name, buf) {
+// 上传站点图片（微信二维码、首页背景）。文件名带时间戳，网站更新后浏览器不会继续显示旧图
+function saveSiteImage(field, name, buf) {
+	const prefix = SITE_IMAGES[field];
+	if (!prefix) throw httpError(400, '未知的图片类型');
 	const ext = path.extname(name).toLowerCase();
-	if (!['.png', '.jpg', '.jpeg', '.webp'].includes(ext)) throw httpError(400, '二维码请用 png / jpg / webp 图片');
+	if (!['.png', '.jpg', '.jpeg', '.webp'].includes(ext)) throw httpError(400, '请用 png / jpg / webp 图片');
 	const site = readSite();
-	const old = site.wechatQr && path.join(PUBLIC_DIR, site.wechatQr);
-	if (old && old.startsWith(path.join(PUBLIC_DIR, 'images') + path.sep) && fs.existsSync(old)) fs.rmSync(old);
+	removeSiteImage(site[field]);
 	fs.mkdirSync(path.join(PUBLIC_DIR, 'images'), { recursive: true });
-	fs.writeFileSync(path.join(PUBLIC_DIR, 'images', `wechat-qr${ext}`), buf);
-	site.wechatQr = `/images/wechat-qr${ext}`;
+	const file = `${prefix}-${Date.now()}${ext}`;
+	fs.writeFileSync(path.join(PUBLIC_DIR, 'images', file), buf);
+	site[field] = `/images/${file}`;
 	writeSite(site);
 	return site;
 }
@@ -517,9 +535,13 @@ async function handle(req, res) {
 	}
 	if (req.method === 'GET' && p === '/api/site') return json(res, 200, readSite());
 	if (req.method === 'PUT' && p === '/api/site') return json(res, 200, updateSite(JSON.parse((await readBody(req)).toString('utf8'))));
-	if (req.method === 'POST' && p === '/api/site/wechat') return json(res, 200, saveWechatQr(url.searchParams.get('name') || 'qr.png', await readBody(req, 10 * 1024 * 1024)));
-	if (req.method === 'GET' && p === '/api/site/wechat') {
-		const file = path.join(PUBLIC_DIR, readSite().wechatQr || '');
+	if (req.method === 'POST' && p === '/api/site/image') {
+		return json(res, 200, saveSiteImage(url.searchParams.get('field'), url.searchParams.get('name') || 'image.jpg', await readBody(req, 20 * 1024 * 1024)));
+	}
+	if (req.method === 'GET' && p === '/api/site/image') {
+		const field = url.searchParams.get('field');
+		if (!SITE_IMAGES[field]) throw httpError(404, 'not found');
+		const file = path.join(PUBLIC_DIR, readSite()[field] || '-');
 		if (!file.startsWith(PUBLIC_DIR + path.sep) || !fs.existsSync(file)) throw httpError(404, 'not found');
 		res.writeHead(200, { 'content-type': MIME[path.extname(file).toLowerCase()] || 'application/octet-stream', 'cache-control': 'no-store' });
 		return res.end(fs.readFileSync(file));

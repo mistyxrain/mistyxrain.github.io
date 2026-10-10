@@ -112,6 +112,14 @@
 	.panel .note { color: var(--muted); margin: -8px 0 0; }
 	.qr { display: flex; gap: 16px; align-items: center; }
 	.qr img { width: 150px; height: 150px; border-radius: 8px; border: 1px solid var(--line); background: #fff; object-fit: contain; }
+	.hero-preview { position: relative; height: 170px; border-radius: 8px; overflow: hidden; border: 1px solid var(--line); background: var(--bg); display: flex; flex-direction: column; justify-content: center; padding: 0 28px; isolation: isolate; }
+	.hero-preview .bg { position: absolute; inset: 0; z-index: -1; background-size: cover; background-position: center 60%; -webkit-mask-image: linear-gradient(#000 60%, transparent); mask-image: linear-gradient(#000 60%, transparent); }
+	.hero-preview b { font-size: 30px; letter-spacing: .15em; color: var(--ink); font-family: 'Songti SC', 'Noto Serif SC', SimSun, serif; }
+	.hero-preview span { color: var(--muted); letter-spacing: .08em; }
+	.hero-preview.on-image b { color: #fff8ec; text-shadow: 0 2px 14px rgb(0 0 0 / .45); }
+	.hero-preview.on-image span { color: rgb(255 240 222 / .88); text-shadow: 0 1px 8px rgb(0 0 0 / .5); }
+	.hero-ctrl { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; margin-top: 8px; }
+	.hero-ctrl input[type=range] { width: 220px; padding: 0; accent-color: var(--accent); }
 	.tag-table { width: 100%; border-collapse: collapse; }
 	.tag-table td { padding: 8px 6px; border-bottom: 1px dashed var(--line); }
 	.tag-table td:last-child { text-align: right; white-space: nowrap; }
@@ -632,38 +640,76 @@ async function showSite() {
 			<label><span>邮箱（网站顶部「信封」图标里显示，留空则不显示该图标）</span><input id="s-email" type="email" value="${esc(site.email)}" /></label>
 			<label><span>微信二维码（网站顶部「微信」图标里显示）</span>
 				<div class="qr">
-					<img id="s-qr" src="/api/site/wechat?t=${Date.now()}" alt="" />
+					<img id="s-qr" src="/api/site/image?field=wechatQr&t=${Date.now()}" alt="" />
 					<button type="button" id="s-qr-btn">更换二维码…</button>
+				</div>
+			</label>
+			<label><span>首页背景图（显示在博客名后面，底部渐隐）</span>
+				<div class="hero-preview" id="hero-preview"><div class="bg" id="hero-bg"></div><b id="hp-title"></b><span id="hp-desc"></span></div>
+				<div class="hero-ctrl">
+					<span>透明度</span><input type="range" id="s-opacity" min="0" max="100" step="5" /><output id="s-opacity-v"></output>
+					<button type="button" id="s-bg-btn">更换背景图…</button>
+					<button type="button" class="ghost" id="s-bg-default">恢复默认（孔明灯）</button>
+					<button type="button" class="ghost" id="s-bg-none">不用背景图</button>
 				</div>
 			</label>
 			<div class="actions"><span class="hint"></span><button type="submit" class="primary">保存设置</button></div>
 		</form>`;
+	// 背景预览：拖动透明度时实时更新
+	let heroBg = site.heroBg || '';
+	const paintHero = () => {
+		const op = $('#s-opacity').value / 100;
+		$('#s-opacity-v').textContent = $('#s-opacity').value + '%';
+		$('#hero-bg').style.backgroundImage = heroBg ? `url('/api/site/image?field=heroBg&t=${encodeURIComponent(heroBg)}')` : 'none';
+		$('#hero-bg').style.opacity = op;
+		$('#hero-preview').classList.toggle('on-image', !!heroBg && op >= 0.45);
+		$('#hp-title').textContent = $('#s-title').value;
+		$('#hp-desc').textContent = $('#s-desc').value;
+	};
+	$('#s-opacity').value = Math.round((site.heroBgOpacity ?? 0.6) * 100);
+	paintHero();
+	['#s-opacity', '#s-title', '#s-desc'].forEach((sel) => $(sel).addEventListener('input', paintHero));
+	const setHeroBg = async (value) => {
+		try {
+			const r = await putJson('/api/site', { heroBg: value });
+			heroBg = r.heroBg;
+			paintHero();
+			refreshPublishCount();
+		} catch (err) { toast(err.message, true); }
+	};
+	$('#s-bg-default').onclick = () => setHeroBg('/images/hero-bg.jpg');
+	$('#s-bg-none').onclick = () => setHeroBg('');
+	$('#s-bg-btn').onclick = () => uploadSiteImage('heroBg', (r) => { heroBg = r.heroBg; paintHero(); toast('背景图已更换'); });
 	$('#main').scrollTop = 0;
 	$('#s-qr').onerror = (e) => (e.target.style.visibility = 'hidden');
 	$('#site-form').onsubmit = async (e) => {
 		e.preventDefault();
 		try {
-			await putJson('/api/site', { title: $('#s-title').value, description: $('#s-desc').value, email: $('#s-email').value });
+			await putJson('/api/site', { title: $('#s-title').value, description: $('#s-desc').value, email: $('#s-email').value, heroBgOpacity: $('#s-opacity').value / 100 });
 			toast('站点设置已保存');
 			refreshPublishCount();
 		} catch (err) { toast(err.message, true); }
 	};
-	$('#s-qr-btn').onclick = () => {
-		const input = $('#img-input');
-		input.value = '';
-		input.onchange = async () => {
-			const file = input.files[0];
-			if (!file) return;
-			try {
-				await api('/api/site/wechat?name=' + encodeURIComponent(file.name), { method: 'POST', body: file });
-				$('#s-qr').style.visibility = '';
-				$('#s-qr').src = '/api/site/wechat?t=' + Date.now();
-				toast('二维码已更换');
-				refreshPublishCount();
-			} catch (err) { toast(err.message, true); }
-		};
-		input.click();
+	$('#s-qr-btn').onclick = () => uploadSiteImage('wechatQr', () => {
+		$('#s-qr').style.visibility = '';
+		$('#s-qr').src = '/api/site/image?field=wechatQr&t=' + Date.now();
+		toast('二维码已更换');
+	});
+}
+
+function uploadSiteImage(field, onDone) {
+	const input = $('#img-input');
+	input.value = '';
+	input.onchange = async () => {
+		const file = input.files[0];
+		if (!file) return;
+		try {
+			const r = await api(`/api/site/image?field=${field}&name=${encodeURIComponent(file.name)}`, { method: 'POST', body: file });
+			onDone(r);
+			refreshPublishCount();
+		} catch (err) { toast(err.message, true); }
 	};
+	input.click();
 }
 
 // ---------- 标签管理 ----------

@@ -1,14 +1,17 @@
 ---
 import PostList from '../components/PostList.astro';
-import { SITE_DESCRIPTION, SITE_TITLE } from '../consts';
+import { HERO_BG, HERO_BG_OPACITY, SITE_DESCRIPTION, SITE_TITLE } from '../consts';
 import Base from '../layouts/Base.astro';
 import { getPosts } from '../utils';
 
 const posts = await getPosts();
+// 背景图比较显眼时，标题改用浅色字
+const onImage = !!HERO_BG && HERO_BG_OPACITY >= 0.45;
 ---
 
 <Base>
-	<section class="hero">
+	<section class:list={['hero', { 'has-bg': HERO_BG, 'on-image': onImage }]}>
+		{HERO_BG && <div class="hero-bg" style={`background-image:url('${HERO_BG}');opacity:${HERO_BG_OPACITY}`} aria-hidden="true" />}
 		<h1>{SITE_TITLE}</h1>
 		<p>{SITE_DESCRIPTION}</p>
 	</section>
@@ -18,7 +21,26 @@ const posts = await getPosts();
 
 <style>
 	.hero {
+		position: relative;
+		isolation: isolate;
 		padding: 72px 0 48px;
+	}
+	.hero.has-bg {
+		padding: 120px 0 88px;
+	}
+	/* 通栏背景：横向铺满整个窗口，底部渐隐到页面底色 */
+	.hero-bg {
+		position: absolute;
+		z-index: -1;
+		top: 0;
+		bottom: -40px;
+		left: 50%;
+		width: 100vw;
+		transform: translateX(-50%);
+		background-size: cover;
+		background-position: center 60%;
+		-webkit-mask-image: linear-gradient(to bottom, #000 55%, transparent);
+		mask-image: linear-gradient(to bottom, #000 55%, transparent);
 	}
 	.hero h1 {
 		margin: 0;
@@ -41,5 +63,13 @@ const posts = await getPosts();
 		font-family: var(--serif);
 		font-size: 1.15rem;
 		letter-spacing: 0.08em;
+	}
+	.hero.on-image h1 {
+		color: #fff8ec;
+		text-shadow: 0 2px 18px rgb(0 0 0 / 0.45);
+	}
+	.hero.on-image p {
+		color: rgb(255 240 222 / 0.88);
+		text-shadow: 0 1px 10px rgb(0 0 0 / 0.5);
 	}
 </style>

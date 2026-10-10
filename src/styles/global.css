@@ -52,6 +52,12 @@ html {
 	-webkit-text-size-adjust: 100%;
 }
 
+/* 首页通栏背景用了 100vw，防止出现横向滚动条 */
+html,
+body {
+	overflow-x: clip;
+}
+
 body {
 	margin: 0;
 	background: var(--bg);

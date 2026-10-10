@@ -6,6 +6,8 @@ export const SITE_DESCRIPTION = site.description;
 export const AUTHOR = site.author;
 export const EMAIL = site.email;
 export const WECHAT_QR = site.wechatQr;
+export const HERO_BG = site.heroBg; // 首页背景图，留空则不显示
+export const HERO_BG_OPACITY = site.heroBgOpacity ?? 0.6; // 0～1
 export const GITHUB = site.github;
 
 // 评论 + 阅读量服务（Waline）的地址。部署好后把网址填在这里，例如 'https://xxx.vercel.app'。
