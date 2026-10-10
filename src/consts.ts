@@ -8,7 +8,7 @@ export const GITHUB = 'https://github.com/mistyxrain';
 
 // 评论 + 阅读量服务（Waline）的地址。部署好后把网址填在这里，例如 'https://xxx.vercel.app'。
 // 留空则文章页不显示评论区和阅读量。
-export const WALINE_SERVER = '';
+export const WALINE_SERVER = 'https://waline-chi-pink-92.vercel.app';
 
 // 顶部导航
 export const NAV = [
