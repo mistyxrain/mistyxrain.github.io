@@ -571,8 +571,15 @@ http
 		const url = `http://localhost:${PORT}/`;
 		console.log(`\n  提灯 · 写作工具已启动：${url}\n  关闭这个窗口即可退出。\n`);
 		if (process.argv.includes('--no-open')) return;
-		const edge = 'C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe';
-		if (process.platform === 'win32' && fs.existsSync(edge)) spawn(edge, [`--app=${url}`, '--window-size=1280,860'], { detached: true, stdio: 'ignore' }).unref();
+		// 优先用 Chrome 的应用模式（独立窗口、无地址栏），没有就用 Edge，再没有就用默认浏览器
+		const browsers = [
+			'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe',
+			'C:\\Program Files (x86)\\Google\\Chrome\\Application\\chrome.exe',
+			path.join(process.env.LOCALAPPDATA || '', 'Google\\Chrome\\Application\\chrome.exe'),
+			'C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe',
+		];
+		const browser = process.platform === 'win32' && browsers.find((b) => fs.existsSync(b));
+		if (browser) spawn(browser, [`--app=${url}`, '--window-size=1280,860'], { detached: true, stdio: 'ignore' }).unref();
 		else if (process.platform === 'win32') spawn('cmd', ['/c', 'start', '', url], { detached: true, stdio: 'ignore' }).unref();
 		else spawn('open', [url], { detached: true, stdio: 'ignore' }).unref();
 	});
