@@ -253,6 +253,79 @@ function saveUpload(slug, name, buf) {
 	return { path: `../../assets/posts/${slug}/${n}` };
 }
 
+// ---------- 删除 / 回收站 ----------
+// 删除的文章连同图片、附件移到 tools/editor/.trash/ 下（不会发布），可恢复或彻底删除
+
+const TRASH_DIR = path.join(HERE, '.trash');
+const TRASH_ID_RE = /^\d{8}-\d{6}__[a-z0-9][a-z0-9-]*$/;
+
+function stamp() {
+	const d = new Date();
+	const p = (n) => String(n).padStart(2, '0');
+	return `${d.getFullYear()}${p(d.getMonth() + 1)}${p(d.getDate())}-${p(d.getHours())}${p(d.getMinutes())}${p(d.getSeconds())}`;
+}
+
+// 一篇文章占用的文件：md、图片目录、附件目录，以及旧式封面（src/assets/posts/<网址名>.jpg）
+function postPaths(slug) {
+	const list = [postFile(slug), path.join(IMG_DIR, slug), path.join(FILE_DIR, slug)];
+	for (const f of fs.existsSync(IMG_DIR) ? fs.readdirSync(IMG_DIR) : []) {
+		const full = path.join(IMG_DIR, f);
+		if (path.parse(f).name === slug && fs.statSync(full).isFile()) list.push(full);
+	}
+	return list.filter((p) => fs.existsSync(p));
+}
+
+function trashPost(slug) {
+	if (!SLUG_RE.test(slug) || !fs.existsSync(postFile(slug))) throw httpError(404, '文章不存在');
+	const { title } = readPost(slug);
+	const id = `${stamp()}__${slug}`;
+	const dir = path.join(TRASH_DIR, id);
+	for (const src of postPaths(slug)) {
+		const dst = path.join(dir, 'files', path.relative(ROOT, src));
+		fs.mkdirSync(path.dirname(dst), { recursive: true });
+		fs.renameSync(src, dst);
+	}
+	fs.writeFileSync(path.join(dir, 'meta.json'), JSON.stringify({ slug, title, deletedAt: new Date().toISOString() }));
+	fs.rmSync(path.join(STAGE_DIR, slug), { recursive: true, force: true });
+	return { id };
+}
+
+function listTrash() {
+	if (!fs.existsSync(TRASH_DIR)) return [];
+	return fs
+		.readdirSync(TRASH_DIR)
+		.filter((id) => TRASH_ID_RE.test(id) && fs.existsSync(path.join(TRASH_DIR, id, 'meta.json')))
+		.map((id) => ({ id, ...JSON.parse(fs.readFileSync(path.join(TRASH_DIR, id, 'meta.json'), 'utf8')) }))
+		.sort((a, b) => b.id.localeCompare(a.id));
+}
+
+function trashDir(id) {
+	const dir = path.join(TRASH_DIR, id || '');
+	if (!TRASH_ID_RE.test(id || '') || !fs.existsSync(dir)) throw httpError(404, '回收站里没有这一项');
+	return dir;
+}
+
+function restoreTrash(id) {
+	const dir = trashDir(id);
+	const { slug } = JSON.parse(fs.readFileSync(path.join(dir, 'meta.json'), 'utf8'));
+	if (fs.existsSync(postFile(slug))) throw httpError(409, `已有网址名为「${slug}」的文章，无法恢复`);
+	const base = path.join(dir, 'files');
+	for (const rel of fs.readdirSync(base, { recursive: true })) {
+		const src = path.join(base, rel);
+		if (!fs.statSync(src).isFile()) continue;
+		const dst = path.join(ROOT, rel);
+		fs.mkdirSync(path.dirname(dst), { recursive: true });
+		fs.renameSync(src, dst);
+	}
+	fs.rmSync(dir, { recursive: true, force: true });
+	return { slug };
+}
+
+function purgeTrash(id) {
+	fs.rmSync(trashDir(id), { recursive: true, force: true });
+	return { ok: true };
+}
+
 // ---------- 站点设置 ----------
 
 const readSite = () => JSON.parse(fs.readFileSync(SITE_FILE, 'utf8'));
@@ -326,11 +399,13 @@ async function gitStatus() {
 	const { out } = await run('git', ['-c', 'core.quotepath=false', 'status', '--porcelain', '-uall']);
 	const changes = out.split('\n').filter(Boolean).map((l) => ({ code: l.slice(0, 2).trim(), file: l.slice(3).replace(/^"|"$/g, '') }));
 	const posts = new Set();
+	const deleted = [];
 	for (const c of changes) {
-		const m = c.file.match(/content\/blog\/([^/]+)\.md$|assets\/posts\/([^/]+)\/|public\/files\/([^/]+)\//);
+		const m = c.file.match(/content\/blog\/([^/]+)\.md$|assets\/posts\/([^/.]+)[/.]|public\/files\/([^/]+)\//);
 		if (m) posts.add(m[1] || m[2] || m[3]);
+		if (m?.[1] && c.code === 'D') deleted.push(m[1]);
 	}
-	return { changes, posts: [...posts] };
+	return { changes, posts: [...posts], deleted };
 }
 
 async function publish(message) {
@@ -416,6 +491,12 @@ async function handle(req, res) {
 		const slug = decodeURIComponent(m[1]);
 		if (!SLUG_RE.test(slug) || !fs.existsSync(postFile(slug))) throw httpError(404, '文章不存在');
 		return json(res, 200, readPost(slug));
+	}
+	if (req.method === 'DELETE' && m) return json(res, 200, trashPost(decodeURIComponent(m[1])));
+	if (req.method === 'GET' && p === '/api/trash') return json(res, 200, listTrash());
+	if (req.method === 'POST' && (p === '/api/trash/restore' || p === '/api/trash/purge')) {
+		const { id } = JSON.parse((await readBody(req)).toString('utf8'));
+		return json(res, 200, p.endsWith('restore') ? restoreTrash(id) : purgeTrash(id));
 	}
 	if (req.method === 'PUT' && m) {
 		const slug = decodeURIComponent(m[1]);

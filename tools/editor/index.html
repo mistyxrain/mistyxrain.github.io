@@ -58,7 +58,9 @@
 	body.dragging #dragmask { display: grid; }
 
 	form { max-width: 980px; margin: 0 auto; padding: 20px 24px 40px; display: grid; gap: 14px; }
-	.row { display: grid; grid-template-columns: 1fr 1fr 160px; gap: 12px; }
+	.row { display: grid; grid-template-columns: 1fr 1.2fr 150px 150px; gap: 12px; }
+	.row-2 { grid-template-columns: 1fr auto; align-items: end; }
+	.link { border: 0; background: none; padding: 0 0 0 6px; color: var(--accent); font-size: 12px; }
 	label { display: grid; gap: 4px; color: var(--muted); font-size: 13px; }
 	label > span em { font-style: normal; color: var(--muted); opacity: .8; margin-left: 6px; }
 	#f-title { font-size: 20px; font-weight: 600; color: var(--ink); }
@@ -119,6 +121,7 @@
 	<div class="brand">🏮 提灯 <small>· 本地写作</small></div>
 	<button type="button" class="ghost" id="btn-site">站点设置</button>
 	<button type="button" class="ghost" id="btn-tags">标签管理</button>
+	<button type="button" class="ghost" id="btn-trash">回收站</button>
 	<button type="button" id="btn-new">＋ 新建文章</button>
 	<button type="button" id="btn-import">导入思源 zip</button>
 	<button type="button" class="primary" id="btn-publish">发布到网站<span class="badge" id="pub-count" hidden></span></button>
@@ -149,12 +152,13 @@
 			<label><span>网址名<em id="slug-hint"></em></span><input id="f-slug" pattern="[a-z0-9][a-z0-9\-]*" required /></label>
 			<label><span>简介<em>（显示在搜索结果和分享卡片里）</em></span><input id="f-desc" /></label>
 			<label><span>发布日期</span><input id="f-date" type="date" required /></label>
+			<label><span>更新日期<button type="button" class="link" id="btn-upd-today">今天</button></span><input id="f-upd" type="date" title="改过文章时可填，文章页会显示「更新于 …」；留空则不显示" /></label>
 		</div>
 		<label><span>标签<em>（输入后按回车）</em></span>
 			<div class="tags" id="tags"><input id="tag-input" placeholder="添加标签" /></div>
 		</label>
 		<div class="suggest" id="tag-suggest"></div>
-		<div class="row" style="grid-template-columns: 1fr auto; align-items: end">
+		<div class="row row-2">
 			<label><span>封面图</span>
 				<div class="cover">
 					<span id="cover-view"></span>
@@ -173,6 +177,7 @@
 		</div>
 		<textarea id="f-body" spellcheck="false"></textarea>
 		<div class="actions">
+			<button type="button" class="ghost danger" id="btn-delete">删除文章</button>
 			<span class="hint" id="save-hint">已保存</span>
 			<button type="button" id="btn-preview">预览</button>
 			<button type="submit" class="primary">保存</button>
@@ -306,6 +311,10 @@ function showEditor(post) {
 	$('#slug-hint').textContent = post.isNew ? '（文章网址 /post/网址名/，只能用小写字母、数字、短横线）' : '（已发布文章的网址不能修改）';
 	$('#f-desc').value = post.description;
 	$('#f-date').value = post.pubDate;
+	$('#f-upd').value = post.updatedDate || '';
+	$('#btn-upd-today').onclick = () => { $('#f-upd').value = today(); setDirty(true); };
+	$('#btn-delete').hidden = post.isNew;
+	$('#btn-delete').onclick = deletePost;
 	$('#f-draft').checked = post.draft;
 	$('#f-body').value = post.body;
 	renderTags();
@@ -475,7 +484,7 @@ async function save() {
 		title: $('#f-title').value,
 		description: $('#f-desc').value,
 		pubDate: $('#f-date').value,
-		updatedDate: cur.updatedDate || '',
+		updatedDate: $('#f-upd').value,
 		tags: cur.tags,
 		draft: $('#f-draft').checked,
 		heroImage: cur.heroImage,
@@ -522,8 +531,9 @@ async function publishFlow() {
 	if (!s.changes.length) return dialog('没有需要发布的内容', '<p>网站上已经是最新的了。</p>', [['好的', 0, 'primary']]);
 	const titleOf = (slug) => posts.find((p) => p.slug === slug)?.title || slug;
 	const drafts = s.posts.filter((sl) => posts.find((p) => p.slug === sl)?.draft);
+	const deleted = new Set(s.deleted || []);
 	const html = `
-		${s.posts.length ? `<p>涉及这些文章：</p><ul>${s.posts.map((sl) => `<li>${esc(titleOf(sl))}${drafts.includes(sl) ? ' <span class="tag-draft">草稿，网上不会显示</span>' : ''}</li>`).join('')}</ul>` : ''}
+		${s.posts.length ? `<p>涉及这些文章：</p><ul>${s.posts.map((sl) => `<li>${esc(titleOf(sl))}${deleted.has(sl) ? ' <span class="tag-draft danger">删除，将从网站上移除</span>' : drafts.includes(sl) ? ' <span class="tag-draft">草稿，网上不会显示</span>' : ''}</li>`).join('')}</ul>` : ''}
 		<p class="muted">共 ${s.changes.length} 个文件改动。发布后约 1～2 分钟网站更新。</p>
 		<label><span>这次更新的说明（可不填）</span><input id="pub-msg" placeholder="例如：新文章：xxx" /></label>`;
 	const ok = await dialog('确定发布到网站吗？', html, [['取消', false], ['发布', true, 'primary']]);
@@ -656,10 +666,68 @@ async function showTagManager() {
 	}));
 }
 
+// ---------- 删除 / 回收站 ----------
+async function deletePost() {
+	const p = posts.find((x) => x.slug === cur.slug);
+	const html = `<p>「${esc(cur.title)}」连同它的图片、附件会移到<b>回收站</b>，之后可以恢复。</p>
+		${p && !p.draft ? '<p class="muted">网站上的这篇要点「发布到网站」后才会消失。它的评论仍保存在评论后台。</p>' : ''}`;
+	if (!(await dialog('删除这篇文章？', html, [['取消', false], ['删除', true, 'primary']]))) return;
+	try {
+		await api('/api/posts/' + encodeURIComponent(cur.slug), { method: 'DELETE' });
+		dirty = false;
+		cur = null;
+		await loadList();
+		showTrash();
+		toast('已移到回收站');
+	} catch (e) { toast(e.message, true); }
+}
+
+async function showTrash() {
+	if (!(await confirmLeave())) return;
+	let items;
+	try { items = await api('/api/trash'); } catch (e) { return toast(e.message, true); }
+	cur = null;
+	dirty = false;
+	renderList();
+	const rows = items
+		.map((t) => `<tr>
+			<td>${esc(t.title)}<div class="muted" style="font-size:12px">/post/${esc(t.slug)}/</div></td>
+			<td class="n">${esc(new Date(t.deletedAt).toLocaleString('zh-CN', { hour12: false }))} 删除</td>
+			<td><button type="button" class="ghost" data-restore="${esc(t.id)}">恢复</button>
+				<button type="button" class="ghost danger" data-purge="${esc(t.id)}" data-title="${esc(t.title)}">彻底删除</button></td>
+		</tr>`)
+		.join('');
+	$('#main').innerHTML = `
+		<div class="panel">
+			<h2>回收站</h2>
+			<p class="note">删除的文章在这里，可以恢复。回收站只存在你电脑上，不会发布。</p>
+			<table class="tag-table"><tbody>${rows || '<tr><td class="muted">回收站是空的</td></tr>'}</tbody></table>
+		</div>`;
+	$('#main').scrollTop = 0;
+	$('#main').querySelectorAll('[data-restore]').forEach((b) => (b.onclick = async () => {
+		try {
+			const r = await putJson('/api/trash/restore', { id: b.dataset.restore }, 'POST');
+			await loadList();
+			toast('已恢复');
+			openPost(r.slug);
+		} catch (e) { toast(e.message, true); }
+	}));
+	$('#main').querySelectorAll('[data-purge]').forEach((b) => (b.onclick = async () => {
+		const ok = await dialog('彻底删除？', `<p>「${esc(b.dataset.title)}」及其图片、附件将从电脑上<b>永久删除</b>，无法再恢复。</p>`, [['取消', false], ['彻底删除', true, 'primary']]);
+		if (!ok) return;
+		try {
+			await putJson('/api/trash/purge', { id: b.dataset.purge }, 'POST');
+			toast('已彻底删除');
+			showTrash();
+		} catch (e) { toast(e.message, true); }
+	}));
+}
+
 // ---------- 事件 ----------
 $('#btn-new').onclick = () => newPost();
 $('#btn-site').onclick = showSite;
 $('#btn-tags').onclick = showTagManager;
+$('#btn-trash').onclick = showTrash;
 $('#body-zip-input').onchange = (e) => importBodyZip(e.target.files[0]);
 $('#btn-import').onclick = () => { $('#zip-input').value = ''; $('#zip-input').click(); };
 $('#zip-input').onchange = (e) => importZip(e.target.files[0]);
