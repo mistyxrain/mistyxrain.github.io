@@ -8,7 +8,7 @@ tags: ["R","matlab"]
 
 ### matlab中如何用QR分解求回归系数
 
-实际上，在matlb中求解β系数并不是用的hat matrix的形式，而是使用QR分解
+实际上，在matlb中求解β系数并不是用的`hat matrix`的形式，而是使用**QR分解**
 
 malab中的`regress`函数中的核心代码如下：
 
@@ -30,7 +30,6 @@ x3=[x(:,5)];
 x4=[x(:,6)];
 X=[ones(n,1),x1,x2,x3,x4]
 
-
 %%%%%%%%%%% 以上为准备数据，下面3行即为regress函数的核心代码
 [Q,R,perm] = qr(X,0)
 b = zeros(5,1);
@@ -38,9 +37,9 @@ b(perm) = R \ (Q'*y);
 % 等价于b(perm) = inv(R) * (Q'*y);
 ```
 
-上述代码的数据文件:[ho1.txt](https://b3logfile.com/siyuan/1606452548425/assets/ho1-20210910161505-64iyqdy.txt)
+上述代码的数据文件:[ho1.txt](/files/qr-fen-jie-yu-ols-hui-gui-xi-shu-qiu-jie-r-and-matlab/ho1.txt)
 
-得到的b(perm)即为beta系数
+得到的`b(perm)`即为`beta`系数
 
 ### 主要参考
 
@@ -48,29 +47,33 @@ b(perm) = R \ (Q'*y);
 
 [【机器学习】用QR分解求最小二乘法的最优闭式解](https://blog.csdn.net/LCCFlccf/article/details/84875534)
 
-附件：[QR分解和回归系数求解.html](https://b3logfile.com/siyuan/1606452548425/assets/QR%E5%88%86%E8%A7%A3%E5%92%8C%E5%9B%9E%E5%BD%92%E7%B3%BB%E6%95%B0%E6%B1%82%E8%A7%A3-20210910160953-5puyj8v.html)
+附件：[QR分解和回归系数求解.html](/files/qr-fen-jie-yu-ols-hui-gui-xi-shu-qiu-jie-r-and-matlab/qr-decomposition.html)
 
 QR分解：
 
-![image.png](https://b3logfile.com/siyuan/1606452548425/assets/image-20210910162141-8ly4m4g.png)
+![image.png](../../assets/posts/qr-fen-jie-yu-ols-hui-gui-xi-shu-qiu-jie-r-and-matlab/image-20210910162141-8ly4m4g.png)
 
-![image.png](https://b3logfile.com/siyuan/1606452548425/assets/image-20210910162242-trxlpi4.png)
+![image.png](../../assets/posts/qr-fen-jie-yu-ols-hui-gui-xi-shu-qiu-jie-r-and-matlab/image-20210910162242-trxlpi4.png)
+
+其中用到的正交的定义请看：
+
+> 矩阵正交
 
 表达式要点
 
-![image.png](https://b3logfile.com/siyuan/1606452548425/assets/image-20210910161048-1v2x0ve.png)
+![image.png](../../assets/posts/qr-fen-jie-yu-ols-hui-gui-xi-shu-qiu-jie-r-and-matlab/image-20210910161048-1v2x0ve.png)
 
 ### R中奇怪的QR分解和回归系数求导
 
 R中的`qr`函数的返回值如下
 
-> qr  
+> qr
 > a matrix with the same dimensions as x.
-> 
-> The upper triangle contains the $\bold{R}$ of the decomposition
-> 
+>
+> **The upper triangle** contains the $\bold{R}$ of the decomposition
+>
 > and the lower triangle contains information on the $\bold{Q}$ of the decomposition (stored in compact form).
-> 
+>
 > Note that the storage used by DQRDC and DGEQP3 differs.
 
 他这个compact form实在是有点迷，没有matlab中那么直接，
@@ -115,8 +118,6 @@ lm(y ~ x1+x2+x4,data = datain )
 # (Intercept)  x1         x2      x4  
 # 56.801       -2.775     6.257   11.505 
 
-
-
 # 自己构建矩阵
 y=datain[,1,drop=F]
 x1=datain[,2,drop=F]
@@ -133,7 +134,7 @@ testu
 # 56.801136 -2.775468  6.256896 11.505319
 ```
 
-还是matlab中的直观，后续探索下如何把这种compat format分理处Q和R
+还是matlab中的直观，后续探索下如何把这种compat format分离出Q和R
 
 ```r
 Q = qr.Q(testmqr, complete = FALSE, Dvec =)
@@ -152,7 +153,7 @@ x4   11.505319
 ### 辅助参考：
 
 > 知乎上[写的一个不错的例子](https://zhuanlan.zhihu.com/p/60743204)
-> 
+>
 > [一个例子，但不好理解](https://zhuanlan.zhihu.com/p/383650516)
-> 
+>
 > [stackoverflow上关于R中的QR分解](https://stackoverflow.com/questions/40250691/multiple-regression-analysis-in-r-using-qr-decomposition)
